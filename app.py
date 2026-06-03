@@ -62,14 +62,29 @@ if "df" not in st.session_state:
     df_git, _ = load_data_from_github()
     st.session_state.df = df_git
 
-# --- 4. BARRA LATERAL (FILTROS SEGÚN TU IMAGEN) ---
+# --- 4. BARRA LATERAL (FILTROS) ---
 st.sidebar.markdown("## 🔍 Filtros")
 
-# Filtros con multiselect como en tu captura
-f_depto = st.sidebar.multiselect("Departamento (Filas):", options=FILAS_DEPARTAMENTOS)
-f_gt = st.sidebar.multiselect("Grupo de Trabajo:", options=OPCIONES_GT)
-f_prov = st.sidebar.multiselect("Proveedor:", options=OPCIONES_PROVEEDORES)
-f_zona = st.sidebar.multiselect("Zona:", options=OPCIONES_ZONAS)
+# Los 4 desplegables nativos que coinciden exactamente con tus capturas
+f_depto = st.sidebar.multiselect(
+    "Departamento (Filas):", 
+    options=FILAS_DEPARTAMENTOS
+)
+
+f_gt = st.sidebar.multiselect(
+    "Grupo de Trabajo:", 
+    options=OPCIONES_GT
+)
+
+f_prov = st.sidebar.multiselect(
+    "Proveedor:", 
+    options=OPCIONES_PROVEEDORES
+)
+
+f_zona = st.sidebar.multiselect(
+    "Zona:", 
+    options=OPCIONES_ZONAS
+)
 
 # --- FUNCIÓN PARA FILTRAR EL CONTENIDO DENTRO DE LAS CELDAS ---
 def filtrar_contenido_celda(texto_celda, filtro_gt, filtro_prov, filtro_zona):
