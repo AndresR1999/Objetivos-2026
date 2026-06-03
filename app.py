@@ -26,7 +26,7 @@ COLUMNAS_REQUERIDAS = [
 # --- LISTAS DE OPCIONES FIJAS ---
 OPCIONES_AUTOMATISTAS = ["Control de Producción", "Procesos Logísticos", "Equipo de Planificación"]
 OPCIONES_ZONAS = ["Reparto doblado", "reparto colgado", "recepciones", "expediciones", "b2c"]
-OPCIONES_PROVEEDORES = ["TGp", "thve", "etdf", "etc"]
+OPCIONES_PROVEEDORES = ["TGW", "PSB", "Infios", "Ferag"]
 OPCIONES_GT = ["GT1", "GT2", "GT3", "GT4", "GT5"]
 CATEGORIAS_ACCION = ["CREAR", "MIGRAR", "MODIFICAR"]
 
