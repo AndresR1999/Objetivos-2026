@@ -63,28 +63,61 @@ if "df" not in st.session_state:
     st.session_state.df = df_git
 
 # --- 4. BARRA LATERAL (FILTROS) ---
-st.sidebar.markdown("## 🔍 Filtros")
+st.sidebar.header("🎯 FILTROS")
+    
+# 1. Función ligera: Solo vacía los textos de las cajas usando las keys
+def limpiar_filtros():
+    st.session_state["s_txt"] = ""
+    st.session_state["rd_dep"] = "Todos"
+    st.session_state["rd_gt"] = "Todos"
+    st.session_state["rd_prov"] = "Todos"
+    st.session_state["rd_zona"] = "Todos"
 
-# Los 4 desplegables nativos que coinciden exactamente con tus capturas
-f_depto = st.sidebar.multiselect(
-    "Departamento (Filas):", 
-    options=FILAS_DEPARTAMENTOS
-)
+# Buscador de texto idéntico a tu ejemplo
+s_txt = st.sidebar.text_input("🔍 Buscar objetivo", "", key="s_txt")
+    
+with st.sidebar.expander("🏢 **Departamento (Filas)**"):
+    f_depto = st.sidebar.radio("Selecciona Departamento", ["Todos"] + FILAS_DEPARTAMENTOS, key="rd_dep")
 
-f_gt = st.sidebar.multiselect(
-    "Grupo de Trabajo:", 
-    options=OPCIONES_GT
-)
+with st.sidebar.expander("📦 **Grupo de Trabajo (GT)**"):
+    f_gt = st.sidebar.radio("Selecciona GT", ["Todos"] + OPCIONES_GT, key="rd_gt")
 
-f_prov = st.sidebar.multiselect(
-    "Proveedor:", 
-    options=OPCIONES_PROVEEDORES
-)
+with st.sidebar.expander("🤝 **Proveedor**"):
+    f_prov = st.sidebar.radio("Selecciona Proveedor", ["Todos"] + OPCIONES_PROVEEDORES, key="rd_prov")
 
-f_zona = st.sidebar.multiselect(
-    "Zona:", 
-    options=OPCIONES_ZONAS
-)
+with st.sidebar.expander("📍 **Zona**"):
+    f_zona = st.sidebar.radio("Selecciona Zona", ["Todos"] + OPCIONES_ZONAS, key="rd_zona")
+    
+st.sidebar.markdown("<br>", unsafe_allow_html=True)
+    
+# Botón de borrado con la función callback y estilo secondary
+st.sidebar.button("🗑️ BORRAR FILTROS", on_click=limpiar_filtros, use_container_width=True, type="secondary")
+
+st.sidebar.markdown("---")
+
+
+# --- LÓGICA DE FILTRADO ADAPTADA ---
+# (Pega esto justo debajo para que funcione con el nuevo sistema "Todos")
+df_visual = st.session_state.df.copy()
+
+# 1. Filtro del buscador de texto libre
+if s_txt:
+    df_visual = df_visual[df_visual.astype(str).apply(lambda x: x.str.contains(s_txt, case=False)).any(axis=1)]
+
+# 2. Filtro de filas (Departamento)
+if f_depto != "Todos":
+    df_visual = df_visual[df_visual["AUTOMATISTAS"] == f_depto]
+
+# 3. Filtro de contenido de celdas (Convertimos a lista para tu función interna)
+filtro_gt_lista = [f_gt] if f_gt != "Todos" else []
+filtro_prov_lista = [f_prov] if f_prov != "Todos" else []
+filtro_zona_lista = [f_zona] if f_zona != "Todos" else []
+
+if filtro_gt_lista or filtro_prov_lista or filtro_zona_lista:
+    for col in ["CREAR", "MIGRAR", "MODIFICAR"]:
+        df_visual[col] = df_visual[col].apply(
+            lambda x: filtrar_contenido_celda(x, filtro_gt_lista, filtro_prov_lista, filtro_zona_lista)
+        )
 
 # --- FUNCIÓN PARA FILTRAR EL CONTENIDO DENTRO DE LAS CELDAS ---
 def filtrar_contenido_celda(texto_celda, filtro_gt, filtro_prov, filtro_zona):
