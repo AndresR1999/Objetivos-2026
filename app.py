@@ -20,6 +20,11 @@ repo = g.get_repo(REPO_NAME)
 # Columnas estrictamente obligatorias para la aplicación
 COLUMNAS_REQUERIDAS = ["OBJETIVOS", "CREAR", "MIGRAR", "MODIFICAR", "AUTOMATISTAS", "PROVEEDORES EXTERNOS", "ZONAS/SECCIONES"]
 
+# --- LISTAS DE OPCIONES FIJAS SOLICITADAS ---
+OPCIONES_AUTOMATISTAS = ["Control de Producción", "Procesos Logísticos", "Equipo de Planificación"]
+OPCIONES_ZONAS = ["Reparto doblado", "reparto colgado", "recepciones", "expediciones", "b2c"]
+OPCIONES_PROVEEDORES = ["TGW","PSB","Infios","Ferag","Fives"]
+
 # --- 2. FUNCIONES DE BASE DE DATOS (GITHUB) ---
 
 def load_data_from_github():
@@ -29,7 +34,7 @@ def load_data_from_github():
         decoded_data = content.decoded_content.decode('utf-8')
         df = pd.read_csv(StringIO(decoded_data))
         
-        # BLINDAJE: Forzar a que existan todas las columnas requeridas si el CSV es antiguo
+        # Forzar a que existan todas las columnas requeridas si el CSV es antiguo
         for col in COLUMNAS_REQUERIDAS:
             if col not in df.columns:
                 df[col] = ""
@@ -69,28 +74,21 @@ if "df" not in st.session_state:
     st.session_state.df = df_git
     st.session_state.sha = sha_git
 
-# SEGUNDO BLINDAJE: Asegurar que el DataFrame en caché tenga todas las columnas
+# Asegurar que el DataFrame en caché tenga todas las columnas
 for col in COLUMNAS_REQUERIDAS:
     if col not in st.session_state.df.columns:
         st.session_state.df[col] = ""
 
-# --- 4. CONFIGURACIÓN DE LA SIDEBAR (BARRA LATERAL) ---
+# --- 4. CONFIGURACIÓN DE LA SIDEBAR (BARRA LATERAL) COn LAS NUEVAS OPCIONES ---
 st.sidebar.title("🔍 Filtros de la Matriz")
 st.sidebar.write("Selecciona opciones para filtrar la tabla principal:")
 
-# Función segura para obtener los valores únicos reales de cada columna de filtros
-def obtener_opciones(columna):
-    if columna in st.session_state.df.columns:
-        valores = st.session_state.df[columna].dropna().unique()
-        return [str(v).strip() for v in valores if str(v).strip() != ""]
-    return []
+# Desplegables multiselección con las listas fijas de opciones
+filtro_auto = st.sidebar.multiselect("Automatistas:", options=OPCIONES_AUTOMATISTAS)
+filtro_prov = st.sidebar.multiselect("Proveedores Externos:", options=OPCIONES_PROVEEDORES)
+filtro_zona = st.sidebar.multiselect("Zonas / Secciones:", options=OPCIONES_ZONAS)
 
-# Crear los desplegables multiselección en la barra lateral
-filtro_auto = st.sidebar.multiselect("Automatistas:", options=obtener_opciones("AUTOMATISTAS"))
-filtro_prov = st.sidebar.multiselect("Proveedores Externos:", options=obtener_opciones("PROVEEDORES EXTERNOS"))
-filtro_zona = st.sidebar.multiselect("Zonas / Secciones:", options=obtener_opciones("ZONAS/SECCIONES"))
-
-# Aplicar los filtros al DataFrame que se va a mostrar
+# Aplicar los filtros al DataFrame que se va a mostrar (ignorando espacios en blanco)
 df_filtrado = st.session_state.df.copy()
 
 if filtro_auto:
@@ -114,7 +112,7 @@ with tab1:
     else:
         st.info("Cualquier cambio que hagas aquí se guardará permanentemente en tu GitHub.")
     
-    # Editor de tabla interactivo (muestra el DF filtrado)
+    # Editor de tabla interactivo
     edited_df = st.data_editor(
         df_filtrado, 
         use_container_width=True,
@@ -123,13 +121,12 @@ with tab1:
     
     if st.button("💾 Guardar Cambios en GitHub"):
         with st.spinner("Sincronizando con GitHub..."):
-            # Combinar de forma segura los cambios del subset filtrado en el DataFrame maestro
+            # Combinar los cambios de la tabla filtrada en el DataFrame original
             st.session_state.df.loc[edited_df.index, edited_df.columns] = edited_df
             
             success = save_data_to_github(st.session_state.df, st.session_state.sha)
             if success:
                 st.success("¡Datos guardados correctamente en objetivos.csv!")
-                # Recargar datos para actualizar el SHA
                 df_git, sha_git = load_data_from_github()
                 st.session_state.df = df_git
                 st.session_state.sha = sha_git
@@ -146,10 +143,12 @@ with tab2:
         mod = st.text_input("Modificar:")
         
         st.write("---")
-        st.write("📂 **Metadatos para los Filtros:**")
-        auto_val = st.text_input("Automatista asignado:")
-        prov_val = st.text_input("Proveedor externo:")
-        zona_val = st.text_input("Zona / Sección:")
+        st.write("📂 **Metadatos para los Filtros (Desplegables):**")
+        
+        # Ahora son selectbox dinámicos con un espacio en blanco inicial opcional
+        auto_val = st.selectbox("Automatista asignado:", options=[""] + OPCIONES_AUTOMATISTAS)
+        prov_val = st.selectbox("Proveedor externo:", options=[""] + OPCIONES_PROVEEDORES)
+        zona_val = st.selectbox("Zona / Sección:", options=[""] + OPCIONES_ZONAS)
         
         if st.form_submit_button("Añadir a la matriz"):
             if nuevo_obj:
@@ -168,7 +167,6 @@ with tab2:
                 # Guardar automáticamente
                 with st.spinner("Guardando nueva fila..."):
                     save_data_to_github(st.session_state.df, st.session_state.sha)
-                    # Actualizar SHA
                     _, sha_git = load_data_from_github()
                     st.session_state.sha = sha_git
                     st.success(f"Objetivo '{nuevo_obj}' añadido y sincronizado.")
