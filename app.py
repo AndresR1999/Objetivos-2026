@@ -17,23 +17,26 @@ FILE_NAME = "objetivos.csv"
 g = Github(TOKEN)
 repo = g.get_repo(REPO_NAME)
 
+# Columnas estrictamente obligatorias para la aplicación
+COLUMNAS_REQUERIDAS = ["OBJETIVOS", "CREAR", "MIGRAR", "MODIFICAR", "AUTOMATISTAS", "PROVEEDORES EXTERNOS", "ZONAS/SECCIONES"]
+
 # --- 2. FUNCIONES DE BASE DE DATOS (GITHUB) ---
 
 def load_data_from_github():
-    """Descarga el CSV desde GitHub. Si no existe, crea uno por defecto."""
+    """Descarga el CSV desde GitHub. Si no existe o le faltan columnas, se repara automáticamente."""
     try:
         content = repo.get_contents(FILE_NAME)
         decoded_data = content.decoded_content.decode('utf-8')
         df = pd.read_csv(StringIO(decoded_data))
         
-        # Asegurar que existan las columnas de filtros si el CSV ya se creó antes sin ellas
-        for col in ["AUTOMATISTAS", "PROVEEDORES EXTERNOS", "ZONAS/SECCIONES"]:
+        # BLINDAJE: Forzar a que existan todas las columnas requeridas si el CSV es antiguo
+        for col in COLUMNAS_REQUERIDAS:
             if col not in df.columns:
                 df[col] = ""
                 
         return df, content.sha
     except:
-        # Si el archivo no existe, creamos el formato inicial con las nuevas columnas
+        # Si el archivo no existe, creamos el formato inicial de tu plantilla con todas las columnas
         df_inicial = pd.DataFrame({
             "OBJETIVOS": ["PROCESOS LOGISTICOS", "CONTROL DE PRODUCCIÓN", "EQUIPO DE PLANIFICACIÓN"],
             "CREAR": ["", "", ""],
@@ -66,14 +69,21 @@ if "df" not in st.session_state:
     st.session_state.df = df_git
     st.session_state.sha = sha_git
 
+# SEGUNDO BLINDAJE: Asegurar que el DataFrame en caché tenga todas las columnas
+for col in COLUMNAS_REQUERIDAS:
+    if col not in st.session_state.df.columns:
+        st.session_state.df[col] = ""
+
 # --- 4. CONFIGURACIÓN DE LA SIDEBAR (BARRA LATERAL) ---
 st.sidebar.title("🔍 Filtros de la Matriz")
 st.sidebar.write("Selecciona opciones para filtrar la tabla principal:")
 
-# Función para obtener los valores únicos reales de cada columna de filtros
+# Función segura para obtener los valores únicos reales de cada columna de filtros
 def obtener_opciones(columna):
-    valores = st.session_state.df[columna].dropna().unique()
-    return [str(v).strip() for v in valores if str(v).strip() != ""]
+    if columna in st.session_state.df.columns:
+        valores = st.session_state.df[columna].dropna().unique()
+        return [str(v).strip() for v in valores if str(v).strip() != ""]
+    return []
 
 # Crear los desplegables multiselección en la barra lateral
 filtro_auto = st.sidebar.multiselect("Automatistas:", options=obtener_opciones("AUTOMATISTAS"))
