@@ -46,15 +46,19 @@ def load_data_from_github():
 def save_data_to_github(df):
     csv_string = df.to_csv(index=False)
     try:
-        # Obtener SHA actual justo antes de enviar para evitar errores
+        # Intentamos obtener el archivo existente para actualizarlo con su SHA correcto
         try:
             current_file = repo.get_contents(FILE_NAME)
             repo.update_file(FILE_NAME, "Sync Matriz", csv_string, current_file.sha)
-        except:
-            repo.create_file(FILE_NAME, "Init Matriz", csv_string)
+        except Exception as e:
+            # Si el archivo no existe (error 404), lo creamos desde cero
+            if "404" in str(e) or "Not Found" in str(e):
+                repo.create_file(FILE_NAME, "Init Matriz", csv_string)
+            else:
+                raise e
         return True
     except Exception as e:
-        st.error(f"Error al guardar: {e}")
+        st.error(f"Error al guardar en GitHub: {e}")
         return False
 
 # --- 3. LÓGICA DE CARGA ---
@@ -65,7 +69,7 @@ if "df" not in st.session_state:
 # --- 4. BARRA LATERAL (FILTROS) ---
 st.sidebar.header("🎯 FILTROS")
     
-# 1. Función ligera: Solo vacía los textos de las cajas usando las keys
+# Función callback para limpiar los filtros restableciendo sus estados a "Todos"
 def limpiar_filtros():
     st.session_state["s_txt"] = ""
     st.session_state["rd_dep"] = "Todos"
@@ -73,7 +77,7 @@ def limpiar_filtros():
     st.session_state["rd_prov"] = "Todos"
     st.session_state["rd_zona"] = "Todos"
 
-# Buscador de texto idéntico a tu ejemplo
+# Buscador de texto
 s_txt = st.sidebar.text_input("🔍 Buscar objetivo", "", key="s_txt")
     
 with st.sidebar.expander("🏢 **Departamento (Filas)**"):
@@ -89,41 +93,16 @@ with st.sidebar.expander("📍 **Zona**"):
     f_zona = st.sidebar.radio("Selecciona Zona", ["Todos"] + OPCIONES_ZONAS, key="rd_zona")
     
 st.sidebar.markdown("<br>", unsafe_allow_html=True)
-    
-# Botón de borrado con la función callback y estilo secondary
 st.sidebar.button("🗑️ BORRAR FILTROS", on_click=limpiar_filtros, use_container_width=True, type="secondary")
-
 st.sidebar.markdown("---")
 
 
-# --- LÓGICA DE FILTRADO ADAPTADA ---
-# (Pega esto justo debajo para que funcione con el nuevo sistema "Todos")
-df_visual = st.session_state.df.copy()
-
-# 1. Filtro del buscador de texto libre
-if s_txt:
-    df_visual = df_visual[df_visual.astype(str).apply(lambda x: x.str.contains(s_txt, case=False)).any(axis=1)]
-
-# 2. Filtro de filas (Departamento)
-if f_depto != "Todos":
-    df_visual = df_visual[df_visual["AUTOMATISTAS"] == f_depto]
-
-# 3. Filtro de contenido de celdas (Convertimos a lista para tu función interna)
-filtro_gt_lista = [f_gt] if f_gt != "Todos" else []
-filtro_prov_lista = [f_prov] if f_prov != "Todos" else []
-filtro_zona_lista = [f_zona] if f_zona != "Todos" else []
-
-if filtro_gt_lista or filtro_prov_lista or filtro_zona_lista:
-    for col in ["CREAR", "MIGRAR", "MODIFICAR"]:
-        df_visual[col] = df_visual[col].apply(
-            lambda x: filtrar_contenido_celda(x, filtro_gt_lista, filtro_prov_lista, filtro_zona_lista)
-        )
-
-# --- FUNCIÓN PARA FILTRAR EL CONTENIDO DENTRO DE LAS CELDAS ---
+# --- 4.5. FUNCIÓN PARA FILTRAR EL CONTENIDO DENTRO DE LAS CELDAS ---
 def filtrar_contenido_celda(texto_celda, filtro_gt, filtro_prov, filtro_zona):
     if not str(texto_celda).strip():
         return ""
-    # Separar objetivos (bloques de 4 líneas separados por doble enter)
+    
+    # Separar objetivos (bloques de 4 líneas separados por doble salto de línea)
     bloques = str(texto_celda).split("\n\n")
     bloques_filtrados = []
     
@@ -140,36 +119,50 @@ def filtrar_contenido_celda(texto_celda, filtro_gt, filtro_prov, filtro_zona):
     
     return "\n\n".join(bloques_filtrados)
 
-# Aplicar filtros a la copia visual
+
+# --- 4.6. PROCESAMIENTO DEL FILTRADO EN LA COPIA VISUAL ---
 df_visual = st.session_state.df.copy()
 
-# 1. Filtro de filas (Departamentos)
-if f_depto:
-    df_visual = df_visual[df_visual["AUTOMATISTAS"].isin(f_depto)]
+# 1. Filtro del buscador de texto libre
+if s_txt:
+    df_visual = df_visual[df_visual.astype(str).apply(lambda x: x.str.contains(s_txt, case=False)).any(axis=1)]
 
-# 2. Filtro de contenido (GT, Prov, Zona)
-if f_gt or f_prov or f_zona:
+# 2. Filtro de filas (Departamento) -> Comparación directa por String
+if f_depto != "Todos":
+    df_visual = df_visual[df_visual["AUTOMATISTAS"] == f_depto]
+
+# 3. Filtro de contenido de celdas (Convertimos la selección única del Radio a Lista para la función)
+filtro_gt_lista = [f_gt] if f_gt != "Todos" else []
+filtro_prov_lista = [f_prov] if f_prov != "Todos" else []
+filtro_zona_lista = [f_zona] if f_zona != "Todos" else []
+
+if filtro_gt_lista or filtro_prov_lista or filtro_zona_lista:
     for col in ["CREAR", "MIGRAR", "MODIFICAR"]:
-        df_visual[col] = df_visual[col].apply(lambda x: filtrar_contenido_celda(x, f_gt, f_prov, f_zona))
+        df_visual[col] = df_visual[col].apply(
+            lambda x: filtrar_contenido_celda(x, filtro_gt_lista, filtro_prov_lista, filtro_zona_lista)
+        )
+
 
 # --- 5. PESTAÑAS ---
 tab1, tab2 = st.tabs(["📊 Matriz de Trabajo", "➕ Inyectar Objetivo"])
 
 with tab1:
     st.subheader("Cuadro de Mandos Operativo")
-    filtros_activos = bool(f_depto or f_gt or f_prov or f_zona)
+    
+    # CONTROL DE SEGURIDAD: Verifica si realmente hay algún filtro aplicando restricciones
+    filtros_activos = bool(s_txt or f_depto != "Todos" or f_gt != "Todos" or f_prov != "Todos" or f_zona != "Todos")
     
     if filtros_activos:
         st.warning("⚠️ Modo Lectura: Los filtros están activos. Limpialos para editar manualmente.")
     
-    # Tabla con celdas multilínea
+    # Tabla interactiva (se deshabilita si estás filtrando datos)
     edited_df = st.data_editor(df_visual, use_container_width=True, disabled=filtros_activos)
     
     if not filtros_activos and st.button("💾 Guardar Cambios Manuales"):
         with st.spinner("Guardando..."):
             st.session_state.df.update(edited_df)
             if save_data_to_github(st.session_state.df):
-                st.success("¡Matriz actualizada!")
+                st.success("¡Matriz actualizada correctamente!")
                 st.rerun()
 
 with tab2:
@@ -187,14 +180,14 @@ with tab2:
             
         if st.form_submit_button("Inyectar en Matriz 🚀"):
             if nombre:
-                # Crear el bloque de texto con el formato solicitado
+                # Crear el bloque estructurado de 4 líneas
                 nuevo_bloque = f"{nombre.upper()}\n{gt}\n{prov}\n{zona}"
                 
-                # Buscar fila y columna
+                # Buscar el índice de la fila correspondiente
                 idx = st.session_state.df[st.session_state.df["AUTOMATISTAS"] == depto].index[0]
                 actual = st.session_state.df.at[idx, accion]
                 
-                # Añadir a la celda
+                # Inyectar el texto controlando si la celda ya contenía información
                 if str(actual).strip():
                     st.session_state.df.at[idx, accion] = f"{actual}\n\n{nuevo_bloque}"
                 else:
