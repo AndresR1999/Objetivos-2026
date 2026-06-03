@@ -6,7 +6,7 @@ import time
 
 # --- 1. CONFIGURACIÓN E INTERFAZ ---
 st.set_page_config(page_title="Objetivos 2026", layout="wide")
-st.title("🎯 Matriz de Objetivos 2026 (Sistema Blindado)")
+st.title("🎯 Matriz de Objetivos 2026")
 
 # Recuperar configuración de los Secrets de Streamlit
 TOKEN = st.secrets["GITHUB_TOKEN"]
@@ -17,132 +17,142 @@ FILE_NAME = "objetivos.csv"
 g = Github(TOKEN)
 repo = g.get_repo(REPO_NAME)
 
-# --- CONFIGURACIÓN FIJA ---
+# --- CONFIGURACIÓN DE FILAS Y COLUMNAS ---
 FILAS_DEPARTAMENTOS = ["Control de Producción", "Procesos Logísticos", "Equipo de Planificación"]
 COLUMNAS_ACCIONES = ["AUTOMATISTAS", "CREAR", "MIGRAR", "MODIFICAR"]
 
-OPCIONES_ZONAS = ["Reparto doblado", "reparto colgado", "recepciones", "expediciones", "b2c"]
-OPCIONES_PROVEEDORES = ["TGW", "PSB", "Infios", "Ferag"]
+# Opciones para los filtros y el formulario
 OPCIONES_GT = ["GT1", "GT2", "GT3", "GT4", "GT5"]
+OPCIONES_PROVEEDORES = ["TGW", "PSB", "Infios", "Ferag", "Fives"]
+OPCIONES_ZONAS = ["Reparto doblado", "Reparto Colgado", "Recepción", "Expediciones", "B2C"]
 
-# --- 2. FUNCIONES DE BASE DE DATOS (REPARADAS) ---
+# --- 2. FUNCIONES DE BASE DE DATOS ---
 
 def load_data_from_github():
-    """Descarga la matriz y su SHA actualizado."""
     try:
         content = repo.get_contents(FILE_NAME)
         decoded_data = content.decoded_content.decode('utf-8')
         df = pd.read_csv(StringIO(decoded_data))
-        
-        # Forzar estructura fija
+        # Forzar estructura de 3 filas
         df = df.set_index("AUTOMATISTAS").reindex(FILAS_DEPARTAMENTOS).reset_index()
-        for col in ["CREAR", "MIGRAR", "MODIFICAR"]:
-            if col not in df.columns:
-                df[col] = ""
-        
         return df[COLUMNAS_ACCIONES].fillna(""), content.sha
     except:
         df_inicial = pd.DataFrame({
             "AUTOMATISTAS": FILAS_DEPARTAMENTOS,
-            "CREAR": ["", "", ""],
-            "MIGRAR": ["", "", ""],
-            "MODIFICAR": ["", "", ""]
+            "CREAR": ["", "", ""], "MIGRAR": ["", "", ""], "MODIFICAR": ["", "", ""]
         })
         return df_inicial, None
 
 def save_data_to_github(df):
-    """Obtiene el SHA actual justo antes de guardar para evitar errores de validación."""
     csv_string = df.to_csv(index=False)
     try:
-        # Intentamos obtener el archivo actual para tener el SHA más reciente
+        # Obtener SHA actual justo antes de enviar para evitar errores
         try:
             current_file = repo.get_contents(FILE_NAME)
-            current_sha = current_file.sha
-            repo.update_file(FILE_NAME, "Actualización de Matriz", csv_string, current_sha)
+            repo.update_file(FILE_NAME, "Sync Matriz", csv_string, current_file.sha)
         except:
-            # Si el archivo no existe en absoluto
-            repo.create_file(FILE_NAME, "Creación de Matriz", csv_string)
+            repo.create_file(FILE_NAME, "Init Matriz", csv_string)
         return True
     except Exception as e:
-        st.error(f"Error crítico al guardar: {e}")
+        st.error(f"Error al guardar: {e}")
         return False
 
-# --- 3. LÓGICA DE SESIÓN ---
+# --- 3. LÓGICA DE CARGA ---
 if "df" not in st.session_state:
     df_git, _ = load_data_from_github()
     st.session_state.df = df_git
 
-# --- 4. BARRA LATERAL (FILTROS) ---
-st.sidebar.title("🔍 Filtros")
-f_auto = st.sidebar.multiselect("Departamento (Filas):", options=FILAS_DEPARTAMENTOS)
+# --- 4. BARRA LATERAL (FILTROS SEGÚN TU IMAGEN) ---
+st.sidebar.markdown("## 🔍 Filtros")
+
+# Filtros con multiselect como en tu captura
+f_depto = st.sidebar.multiselect("Departamento (Filas):", options=FILAS_DEPARTAMENTOS)
 f_gt = st.sidebar.multiselect("Grupo de Trabajo:", options=OPCIONES_GT)
 f_prov = st.sidebar.multiselect("Proveedor:", options=OPCIONES_PROVEEDORES)
 f_zona = st.sidebar.multiselect("Zona:", options=OPCIONES_ZONAS)
 
-def filtrar_bloques_celda(texto_celda, filtro_gt, filtro_prov, filtro_zona):
-    if pd.isna(texto_celda) or not str(texto_celda).strip():
+# --- FUNCIÓN PARA FILTRAR EL CONTENIDO DENTRO DE LAS CELDAS ---
+def filtrar_contenido_celda(texto_celda, filtro_gt, filtro_prov, filtro_zona):
+    if not str(texto_celda).strip():
         return ""
+    # Separar objetivos (bloques de 4 líneas separados por doble enter)
     bloques = str(texto_celda).split("\n\n")
-    bloques_validos = []
+    bloques_filtrados = []
+    
     for b in bloques:
         lineas = [l.strip() for l in b.split("\n") if l.strip()]
         if len(lineas) >= 4:
+            # lineas[1] es GT, lineas[2] es Proveedor, lineas[3] es Zona
             match_gt = not filtro_gt or lineas[1] in filtro_gt
             match_prov = not filtro_prov or lineas[2] in filtro_prov
             match_zona = not filtro_zona or lineas[3] in filtro_zona
+            
             if match_gt and match_prov and match_zona:
-                bloques_validos.append(b)
-        elif not filtro_gt and not filtro_prov and not filtro_zona:
-            bloques_validos.append(b)
-    return "\n\n".join(bloques_validos)
+                bloques_filtrados.append(b)
+    
+    return "\n\n".join(bloques_filtrados)
 
-df_display = st.session_state.df.copy()
-if f_auto:
-    df_display = df_display[df_display["AUTOMATISTAS"].isin(f_auto)]
+# Aplicar filtros a la copia visual
+df_visual = st.session_state.df.copy()
+
+# 1. Filtro de filas (Departamentos)
+if f_depto:
+    df_visual = df_visual[df_visual["AUTOMATISTAS"].isin(f_depto)]
+
+# 2. Filtro de contenido (GT, Prov, Zona)
 if f_gt or f_prov or f_zona:
     for col in ["CREAR", "MIGRAR", "MODIFICAR"]:
-        df_display[col] = df_display[col].apply(lambda x: filtrar_bloques_celda(x, f_gt, f_prov, f_zona))
+        df_visual[col] = df_visual[col].apply(lambda x: filtrar_contenido_celda(x, f_gt, f_prov, f_zona))
 
 # --- 5. PESTAÑAS ---
 tab1, tab2 = st.tabs(["📊 Matriz de Trabajo", "➕ Inyectar Objetivo"])
 
 with tab1:
-    st.subheader("Cuadro de Mandos")
-    filtros_activos = bool(f_auto or f_gt or f_prov or f_zona)
-    if filtros_activos:
-        st.warning("⚠️ Modo Lectura (Filtros activos)")
+    st.subheader("Cuadro de Mandos Operativo")
+    filtros_activos = bool(f_depto or f_gt or f_prov or f_zona)
     
-    edited_df = st.data_editor(df_display, use_container_width=True, disabled=filtros_activos)
+    if filtros_activos:
+        st.warning("⚠️ Modo Lectura: Los filtros están activos. Limpialos para editar manualmente.")
+    
+    # Tabla con celdas multilínea
+    edited_df = st.data_editor(df_visual, use_container_width=True, disabled=filtros_activos)
     
     if not filtros_activos and st.button("💾 Guardar Cambios Manuales"):
-        with st.spinner("Sincronizando..."):
+        with st.spinner("Guardando..."):
             st.session_state.df.update(edited_df)
             if save_data_to_github(st.session_state.df):
-                st.success("¡Guardado!")
-                time.sleep(1)
+                st.success("¡Matriz actualizada!")
                 st.rerun()
 
 with tab2:
-    st.subheader("Inyector de Objetivos")
+    st.subheader("Formulario de Clasificación")
     with st.form("inyector_form", clear_on_submit=True):
         col1, col2 = st.columns(2)
         with col1:
-            nombre_obj = st.text_input("Nombre del Objetivo:")
-            accion_col = st.radio("Acción:", options=["CREAR", "MIGRAR", "MODIFICAR"], horizontal=True)
-            depto_fila = st.selectbox("Departamento:", options=FILAS_DEPARTAMENTOS)
+            nombre = st.text_input("Nombre del Objetivo:")
+            accion = st.radio("Acción (Columna):", options=["CREAR", "MIGRAR", "MODIFICAR"], horizontal=True)
+            depto = st.selectbox("Departamento (Fila):", options=FILAS_DEPARTAMENTOS)
         with col2:
-            gt_val = st.selectbox("GT:", options=OPCIONES_GT)
-            prov_val = st.selectbox("Proveedor:", options=OPCIONES_PROVEEDORES)
-            zona_val = st.selectbox("Zona:", options=OPCIONES_ZONAS)
+            gt = st.selectbox("Grupo de Trabajo (GT):", options=OPCIONES_GT)
+            prov = st.selectbox("Proveedor:", options=OPCIONES_PROVEEDORES)
+            zona = st.selectbox("Zona:", options=OPCIONES_ZONAS)
             
-        if st.form_submit_button("Inyectar Objetivo 🚀"):
-            if nombre_obj:
-                bloque = f"{nombre_obj.upper()}\n{gt_val}\n{prov_val}\n{zona_val}"
-                idx = st.session_state.df[st.session_state.df["AUTOMATISTAS"] == depto_fila].index[0]
-                actual = st.session_state.df.at[idx, accion_col]
-                st.session_state.df.at[idx, accion_col] = f"{actual}\n\n{bloque}".strip()
+        if st.form_submit_button("Inyectar en Matriz 🚀"):
+            if nombre:
+                # Crear el bloque de texto con el formato solicitado
+                nuevo_bloque = f"{nombre.upper()}\n{gt}\n{prov}\n{zona}"
+                
+                # Buscar fila y columna
+                idx = st.session_state.df[st.session_state.df["AUTOMATISTAS"] == depto].index[0]
+                actual = st.session_state.df.at[idx, accion]
+                
+                # Añadir a la celda
+                if str(actual).strip():
+                    st.session_state.df.at[idx, accion] = f"{actual}\n\n{nuevo_bloque}"
+                else:
+                    st.session_state.df.at[idx, accion] = nuevo_bloque
                 
                 if save_data_to_github(st.session_state.df):
-                    st.success("¡Objetivo inyectado!")
+                    st.success("¡Objetivo inyectado correctamente!")
                     time.sleep(1)
                     st.rerun()
