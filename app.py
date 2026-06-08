@@ -27,6 +27,16 @@ JIRA_PROVEEDOR_FIELD_NAME = st.secrets.get(
     "Equipos Responsables (Externos)"
 )
 
+PROVEEDOR_BY_OBJECT_ID = {
+    "288795": "Clustag",
+    "346316": "Ninguno",
+    "288760": "TGW",
+    "295882": "DXC",
+    "288796": "Infios",
+    "288761": "PSB",
+    "309628": "Ferag",
+    # "XXXXX": "Fives",
+}
 
 auth = HTTPBasicAuth(JIRA_EMAIL, JIRA_API_TOKEN)
 
