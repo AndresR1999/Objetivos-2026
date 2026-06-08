@@ -742,3 +742,22 @@ with st.expander("Configuración de la consulta"):
         )
     else:
         st.warning("Campo de proveedor no encontrado.")
+
+with st.expander("Diagnóstico proveedor externo"):
+    st.write("Campo configurado:", JIRA_PROVEEDOR_FIELD_NAME)
+    st.write("Campo Jira detectado:", proveedor_field_id)
+
+    sample_rows = df[
+        df["Proveedor externo"].astype(str).str.contains("Objeto", na=False)
+    ]
+
+    if sample_rows.empty:
+        st.info("No hay filas con proveedor tipo Objeto para diagnosticar.")
+    else:
+        st.write("Ejemplo detectado:")
+        st.dataframe(
+            sample_rows[["Clave", "Proveedor externo", "URL"]].head(5),
+            use_container_width=True,
+            hide_index=True
+        )
+
