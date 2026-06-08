@@ -72,6 +72,28 @@ def jira_get(endpoint, params=None):
 
     return response.json()
 
+def jira_get_optional(endpoint, params=None):
+    url = f"{JIRA_BASE_URL}{endpoint}"
+
+    try:
+        response = requests.get(
+            url,
+            headers=headers,
+            auth=auth,
+            params=params,
+            timeout=30
+        )
+    except requests.exceptions.RequestException:
+        return None
+
+    if response.status_code >= 400:
+        return None
+
+    try:
+        return response.json()
+    except Exception:
+        return None
+
 
 @st.cache_data(ttl=300)
 def get_current_user():
@@ -173,71 +195,219 @@ def clean_rendered_value(value):
     return value
 
 
+def looks_like_technical_asset_value(value):
+    if not value:
+        return False
+
+    value_str = str(value)
+
+    technical_markers = [
+        "workspaceId",
+        "objectId",
+        "'workspace",
+        '"workspace',
+        "'id'",
+        '"id"'
+    ]
+
+    return any(marker in value_str for marker in technical_markers)
+
+
+def extract_asset_refs(value):
+    refs = []
+
+    if value is None:
+        return refs
+
+    if isinstance(value, list):
+        for item in value:
+            refs.extend(extract_asset_refs(item))
+        return refs
+
+    if isinstance(value, dict):
+        workspace_id = (
+            value.get("workspaceId")
+            or value.get("workspace")
+            or value.get("workspace_id")
+        )
+
+        object_id = (
+            value.get("objectId")
+            or value.get("object_id")
+        )
+
+        raw_id = value.get("id")
+
+        if not object_id and raw_id:
+            raw_id_str = str(raw_id)
+
+            # Casos tipo "workspaceId:objectId"
+            if ":" in raw_id_str:
+                parts = raw_id_str.split(":")
+                if len(parts) >= 2:
+                    if not workspace_id:
+                        workspace_id = parts[0]
+                    object_id = parts[-1]
+
+            # Casos donde el id termina en número
+            if not object_id:
+                match = re.search(r"(\d+)$", raw_id_str)
+                if match:
+                    object_id = match.group(1)
+
+        if workspace_id and object_id:
+            refs.append({
+                "workspace_id": str(workspace_id),
+                "object_id": str(object_id)
+            })
+
+        return refs
+
+    return refs
+
+
+def pick_asset_name(asset_data):
+    if not asset_data:
+        return ""
+
+    # Primero probamos campos directos habituales
+    for key in ["label", "name", "displayName"]:
+        value = asset_data.get(key)
+        if value:
+            return str(value)
+
+    # Después buscamos dentro de atributos de Assets
+    attributes = asset_data.get("attributes", [])
+
+    preferred_attribute_names = [
+        "name",
+        "nombre",
+        "proveedor",
+        "supplier",
+        "vendor",
+        "equipo",
+        "team",
+        "external provider",
+        "proveedor externo"
+    ]
+
+    fallback_values = []
+
+    for attribute in attributes:
+        attr_info = attribute.get("objectTypeAttribute", {}) or {}
+        attr_name = str(attr_info.get("name", "")).strip().lower()
+
+        values = attribute.get("objectAttributeValues", []) or []
+
+        for item in values:
+            candidate = (
+                item.get("displayValue")
+                or item.get("searchValue")
+                or item.get("value")
+            )
+
+            referenced_object = item.get("referencedObject")
+            if referenced_object:
+                candidate = (
+                    referenced_object.get("label")
+                    or referenced_object.get("name")
+                    or candidate
+                )
+
+            if not candidate:
+                continue
+
+            candidate = str(candidate)
+
+            if attr_name in preferred_attribute_names:
+                return candidate
+
+            fallback_values.append(candidate)
+
+    if fallback_values:
+        return fallback_values[0]
+
+    # Último recurso: objectKey
+    object_key = asset_data.get("objectKey")
+    if object_key:
+        return str(object_key)
+
+    return ""
+
+
+@st.cache_data(ttl=3600)
+def resolve_asset_object_name(workspace_id, object_id):
+    """
+    Intenta resolver un objeto de Jira Assets a nombre legible.
+    Probamos varios endpoints porque Atlassian puede exponer Assets
+    de forma diferente según la configuración del site.
+    """
+
+    endpoints = [
+        f"/rest/servicedeskapi/assets/workspace/{workspace_id}/v1/object/{object_id}",
+        f"/rest/assets/1.0/object/{object_id}",
+        f"/rest/insight/1.0/object/{object_id}"
+    ]
+
+    for endpoint in endpoints:
+        data = jira_get_optional(endpoint)
+
+        if not data:
+            continue
+
+        name = pick_asset_name(data)
+
+        if name:
+            return name
+
+    return f"Objeto {object_id}"
+
+
 def extract_provider_value(raw_value, rendered_value=None):
     """
-    Intenta obtener el nombre legible del proveedor externo.
+    Extrae el proveedor externo.
 
-    Jira Assets puede devolver:
-    - Un texto normal
-    - Una lista de objetos
-    - Un objeto con value/name/label
-    - Un objeto técnico con workspaceId/objectId/id
-    - Una versión renderizada en HTML
+    Si Jira devuelve un texto normal, lo usa.
+    Si devuelve un objeto técnico de Assets, intenta resolverlo
+    mediante objectId/workspaceId.
     """
 
-    # 1. Primero intentamos usar el valor renderizado de Jira
     rendered_clean = clean_rendered_value(rendered_value)
 
-    if rendered_clean:
+    if rendered_clean and not looks_like_technical_asset_value(rendered_clean):
         return rendered_clean
 
-    # 2. Si no hay rendered value, usamos la lógica estándar
     if raw_value is None:
         return ""
 
-    if isinstance(raw_value, str):
+    # Si ya viene como texto legible, lo usamos
+    if isinstance(raw_value, str) and not looks_like_technical_asset_value(raw_value):
         return raw_value
 
-    if isinstance(raw_value, list):
-        values = []
+    asset_refs = extract_asset_refs(raw_value)
 
-        for item in raw_value:
-            if isinstance(item, dict):
-                readable_value = (
-                    item.get("label")
-                    or item.get("value")
-                    or item.get("name")
-                    or item.get("displayName")
-                    or item.get("objectKey")
-                )
+    if asset_refs:
+        names = []
 
-                if readable_value:
-                    values.append(str(readable_value))
-                elif item.get("objectId"):
-                    values.append(f"Objeto {item.get('objectId')}")
-            else:
-                values.append(str(item))
+        for ref in asset_refs:
+            name = resolve_asset_object_name(
+                ref["workspace_id"],
+                ref["object_id"]
+            )
 
-        return ", ".join(values)
+            if name:
+                names.append(name)
 
-    if isinstance(raw_value, dict):
-        readable_value = (
-            raw_value.get("label")
-            or raw_value.get("value")
-            or raw_value.get("name")
-            or raw_value.get("displayName")
-            or raw_value.get("objectKey")
-        )
+        return ", ".join(names)
 
-        if readable_value:
-            return str(readable_value)
+    # Fallback para otros tipos de campos
+    fallback = extract_value(raw_value)
 
-        if raw_value.get("objectId"):
-            return f"Objeto {raw_value.get('objectId')}"
-
+    if looks_like_technical_asset_value(fallback):
         return ""
 
-    return str(raw_value)
+    return fallback
+
 
 
 def format_date(date_value):
