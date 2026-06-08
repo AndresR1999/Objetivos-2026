@@ -3,7 +3,8 @@ import pandas as pd
 import requests
 from requests.auth import HTTPBasicAuth
 from datetime import datetime
-
+import re
+from html import unescape
 
 st.set_page_config(
     page_title="Visor de Tickets Jira",
@@ -151,6 +152,93 @@ def extract_value(value):
 
     return str(value)
 
+def clean_rendered_value(value):
+    if not value:
+        return ""
+
+    if isinstance(value, list):
+        value = ", ".join([str(x) for x in value])
+
+    value = str(value)
+
+    # Quitar etiquetas HTML
+    value = re.sub(r"<[^>]+>", " ", value)
+
+    # Decodificar entidades HTML
+    value = unescape(value)
+
+    # Limpiar espacios repetidos
+    value = re.sub(r"\s+", " ", value).strip()
+
+    return value
+
+
+def extract_provider_value(raw_value, rendered_value=None):
+    """
+    Intenta obtener el nombre legible del proveedor externo.
+
+    Jira Assets puede devolver:
+    - Un texto normal
+    - Una lista de objetos
+    - Un objeto con value/name/label
+    - Un objeto técnico con workspaceId/objectId/id
+    - Una versión renderizada en HTML
+    """
+
+    # 1. Primero intentamos usar el valor renderizado de Jira
+    rendered_clean = clean_rendered_value(rendered_value)
+
+    if rendered_clean:
+        return rendered_clean
+
+    # 2. Si no hay rendered value, usamos la lógica estándar
+    if raw_value is None:
+        return ""
+
+    if isinstance(raw_value, str):
+        return raw_value
+
+    if isinstance(raw_value, list):
+        values = []
+
+        for item in raw_value:
+            if isinstance(item, dict):
+                readable_value = (
+                    item.get("label")
+                    or item.get("value")
+                    or item.get("name")
+                    or item.get("displayName")
+                    or item.get("objectKey")
+                )
+
+                if readable_value:
+                    values.append(str(readable_value))
+                elif item.get("objectId"):
+                    values.append(f"Objeto {item.get('objectId')}")
+            else:
+                values.append(str(item))
+
+        return ", ".join(values)
+
+    if isinstance(raw_value, dict):
+        readable_value = (
+            raw_value.get("label")
+            or raw_value.get("value")
+            or raw_value.get("name")
+            or raw_value.get("displayName")
+            or raw_value.get("objectKey")
+        )
+
+        if readable_value:
+            return str(readable_value)
+
+        if raw_value.get("objectId"):
+            return f"Objeto {raw_value.get('objectId')}"
+
+        return ""
+
+    return str(raw_value)
+
 
 def format_date(date_value):
     if not date_value:
@@ -193,8 +281,10 @@ def get_jira_issues(jql, max_results, proveedor_field_name):
         params = {
             "jql": jql,
             "maxResults": current_page_size,
-            "fields": ",".join(base_fields)
+            "fields": ",".join(base_fields),
+            "expand": "renderedFields"
         }
+
 
         if next_page_token:
             params["nextPageToken"] = next_page_token
@@ -219,8 +309,10 @@ def get_jira_issues(jql, max_results, proveedor_field_name):
 
     for issue in all_issues:
         fields = issue.get("fields", {})
-
+        rendered_fields = issue.get("renderedFields", {})
+    
         status = fields.get("status") or {}
+
         assignee = fields.get("assignee")
         reporter = fields.get("reporter")
         priority = fields.get("priority") or {}
@@ -231,7 +323,11 @@ def get_jira_issues(jql, max_results, proveedor_field_name):
         proveedor_value = ""
 
         if proveedor_field_id:
-            proveedor_value = extract_value(fields.get(proveedor_field_id))
+            proveedor_value = extract_provider_value(
+                fields.get(proveedor_field_id),
+                rendered_fields.get(proveedor_field_id)
+            )
+
 
         issue_key = issue.get("key", "")
 
