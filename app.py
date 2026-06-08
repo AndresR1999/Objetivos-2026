@@ -184,7 +184,7 @@ def get_jira_issues(jql, max_results, proveedor_field_name):
         base_fields.append(proveedor_field_id)
 
     all_issues = []
-    start_at = 0
+    next_page_token = None
     page_size = 100
 
     while len(all_issues) < max_results:
@@ -192,24 +192,27 @@ def get_jira_issues(jql, max_results, proveedor_field_name):
 
         params = {
             "jql": jql,
-            "startAt": start_at,
             "maxResults": current_page_size,
             "fields": ",".join(base_fields)
         }
 
-        data = jira_get("/rest/api/3/search", params=params)
+        if next_page_token:
+            params["nextPageToken"] = next_page_token
+
+        data = jira_get("/rest/api/3/search/jql", params=params)
 
         issues = data.get("issues", [])
-        total = data.get("total", 0)
-
         all_issues.extend(issues)
 
         if not issues:
             break
 
-        start_at += len(issues)
+        if data.get("isLast", False):
+            break
 
-        if start_at >= total:
+        next_page_token = data.get("nextPageToken")
+
+        if not next_page_token:
             break
 
     rows = []
