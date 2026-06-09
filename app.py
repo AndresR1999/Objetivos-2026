@@ -1345,6 +1345,143 @@ def render_static_daily_trend_chart(series):
 
     st.pyplot(fig, clear_figure=True)
 
+def render_static_html_table(df_table, url_column="URL"):
+    if df_table is None or df_table.empty:
+        return ""
+
+    visible_columns = list(df_table.columns)
+
+    html = """
+    <style>
+        .static-table-wrapper {
+            width: 100%;
+            overflow: visible;
+            pointer-events: none;
+            user-select: none;
+            margin-top: 0.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .static-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: #ffffff;
+            border: 1px solid #e5e7eb;
+            border-radius: 14px;
+            overflow: hidden;
+            box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
+            font-size: 13px;
+        }
+
+        .static-table thead tr {
+            background: #f8fafc;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .static-table th {
+            padding: 11px 12px;
+            text-align: left;
+            color: #334155;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+
+        .static-table td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #f1f5f9;
+            color: #475569;
+            vertical-align: top;
+        }
+
+        .static-table tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        .static-table tbody tr:nth-child(even) {
+            background: #fafafa;
+        }
+
+        .static-table .numeric-cell {
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .static-table .open-ticket-button {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 999px;
+            background: #2563eb;
+            color: #ffffff !important;
+            text-decoration: none;
+            font-weight: 700;
+            font-size: 12px;
+            pointer-events: auto;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .static-table .open-ticket-button:hover {
+            background: #1d4ed8;
+            color: #ffffff !important;
+            text-decoration: none;
+        }
+
+        .static-table .empty-url {
+            color: #94a3b8;
+        }
+    </style>
+    """
+
+    html += '<div class="static-table-wrapper">'
+    html += '<table class="static-table">'
+
+    html += "<thead><tr>"
+    for column in visible_columns:
+        html += f"<th>{escape(str(column))}</th>"
+    html += "</tr></thead>"
+
+    html += "<tbody>"
+
+    for _, row in df_table.iterrows():
+        html += "<tr>"
+
+        for column in visible_columns:
+            value = row[column]
+
+            if pd.isna(value):
+                value = ""
+
+            if column == url_column:
+                url = str(value).strip()
+
+                if url and url != "-":
+                    cell_html = (
+                        f'<a class="open-ticket-button" '
+                        f'href="{escape(url, quote=True)}" '
+                        f'target="_blank" '
+                        f'rel="noopener noreferrer">Abrir</a>'
+                    )
+                else:
+                    cell_html = '<span class="empty-url">-</span>'
+
+                html += f"<td>{cell_html}</td>"
+
+            else:
+                cell_class = ""
+
+                if pd.api.types.is_number(value):
+                    cell_class = ' class="numeric-cell"'
+
+                html += f"<td{cell_class}>{escape(str(value))}</td>"
+
+        html += "</tr>"
+
+    html += "</tbody>"
+    html += "</table>"
+    html += "</div>"
+
+    return html
+
 with tab_analytics:
     st.markdown("**Resumen por proveedor externo**")
     st.caption("Los datos de esta pestaña respetan los filtros seleccionados en la barra lateral.")
@@ -1450,34 +1587,65 @@ with tab_analytics:
             provider_summary = pd.DataFrame(columns=[
                 "Proveedor externo",
                 "Tickets",
-                "Abiertos",
-                "Escalados",
-                "Alta_prioridad",
-                "Sin_asignar",
-                "% Escalados"
+                "Prioridad Low",
+                "Prioridad Medium",
+                "Prioridad High",
+                "Prioridad Highest",
+                "% tickets a proveedor"
             ])
         else:
+            prioridad_provider_norm = (
+                df_provider_exploded["Prioridad"]
+                .fillna("")
+                .astype(str)
+                .str.strip()
+                .str.lower()
+            )
+        
+            df_provider_exploded["_prioridad_low"] = prioridad_provider_norm.eq("low")
+            df_provider_exploded["_prioridad_medium"] = prioridad_provider_norm.eq("medium")
+            df_provider_exploded["_prioridad_high"] = prioridad_provider_norm.eq("high")
+            df_provider_exploded["_prioridad_highest"] = prioridad_provider_norm.eq("highest")
+        
             provider_summary = (
                 df_provider_exploded
                 .groupby("Proveedor", dropna=False)
                 .agg(
                     Tickets=("Clave", "nunique"),
-                    Abiertos=("_abierto", "sum"),
-                    Escalados=("_escalado", "sum"),
-                    Alta_prioridad=("_prioridad_alta", "sum"),
-                    Sin_asignar=("_sin_asignar", "sum")
+                    **{
+                        "Prioridad Low": ("_prioridad_low", "sum"),
+                        "Prioridad Medium": ("_prioridad_medium", "sum"),
+                        "Prioridad High": ("_prioridad_high", "sum"),
+                        "Prioridad Highest": ("_prioridad_highest", "sum"),
+                    }
                 )
                 .reset_index()
                 .rename(columns={"Proveedor": "Proveedor externo"})
             )
-
-            provider_summary["% Escalados"] = (
-                provider_summary["Escalados"] / provider_summary["Tickets"] * 100
-            ).round(1)
-
-            provider_summary = provider_summary.sort_values(
-                by=["Tickets", "Escalados", "Alta_prioridad"],
-                ascending=[False, False, False]
+        
+            total_tickets_abiertos_a_proveedor = int(provider_summary["Tickets"].sum())
+        
+            provider_summary["% tickets a proveedor"] = provider_summary["Tickets"].apply(
+                lambda tickets: (
+                    f"{tickets / total_tickets_abiertos_a_proveedor * 100:.1f}%"
+                    if total_tickets_abiertos_a_proveedor > 0
+                    else "0.0%"
+                )
+            )
+        
+            provider_summary = provider_summary[
+                [
+                    "Proveedor externo",
+                    "Tickets",
+                    "Prioridad Low",
+                    "Prioridad Medium",
+                    "Prioridad High",
+                    "Prioridad Highest",
+                    "% tickets a proveedor"
+                ]
+            ].sort_values(
+                by="Tickets",
+                ascending=False
             )
 
         total_proveedores = provider_summary["Proveedor externo"].nunique()
@@ -1490,12 +1658,10 @@ with tab_analytics:
             proveedor_top = "Sin proveedor"
             tickets_top = 0
             total_escalados = 0
-            total_sin_asignar = 0
         else:
             proveedor_top = provider_summary.iloc[0]["Proveedor externo"]
             tickets_top = int(provider_summary.iloc[0]["Tickets"])
-            total_escalados = int(provider_summary["Escalados"].sum())
-            total_sin_asignar = int(provider_summary["Sin_asignar"].sum())
+            total_escalados = int(df_provider["_escalado"].sum())
 
         kpi1, kpi2, kpi3, kpi4 = st.columns(4)
 
@@ -1509,15 +1675,12 @@ with tab_analytics:
         if provider_summary.empty:
             st.info("No hay proveedores externos asignados en los tickets filtrados.")
         else:
-            provider_summary_display = provider_summary.rename(columns={
-                "Alta_prioridad": "Alta prioridad",
-                "Sin_asignar": "Sin asignar"
-            })
-
-            st.dataframe(
-                provider_summary_display,
-                hide_index=True,
-                use_container_width=True
+            st.markdown(
+                render_static_html_table(
+                    provider_summary,
+                    url_column=None
+                ),
+                unsafe_allow_html=True
             )
 
         st.markdown("---")
@@ -1560,10 +1723,12 @@ with tab_analytics:
                 if col in provider_detail.columns
             ]
 
-            st.dataframe(
-                provider_detail[detail_columns],
-                hide_index=True,
-                use_container_width=True
+            st.markdown(
+                render_static_html_table(
+                    provider_detail[detail_columns],
+                    url_column="URL"
+                ),
+                unsafe_allow_html=True
             )
 
         st.markdown("---")
