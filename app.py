@@ -735,8 +735,15 @@ if not proveedor_field_id:
         "Revisa que el nombre del campo coincida exactamente con Jira."
     )
 
+tab_tickets, tab_analytics = st.tabs([
+    "📋 Tickets",
+    "📊 Proveedores y tendencias"
+])
 
-st.markdown("**Tabla de tickets**")
+
+with tab_tickets:
+    st.markdown("**Tabla de tickets**")
+
 
 columns_to_show = [
     "Clave",
@@ -1111,14 +1118,236 @@ def render_tickets_table(df_table):
 
     return "".join(html_parts)
 
-if df_table.empty:
-    st.info("No hay tickets que coincidan con los filtros seleccionados.")
-else:
-    components.html(
-        render_tickets_table(df_table),
-        height=760,
-        scrolling=False
-    )
+with tab_tickets:
+    if df_table.empty:
+        st.info("No hay tickets que coincidan con los filtros seleccionados.")
+    else:
+        components.html(
+            render_tickets_table(df_table),
+            height=760,
+            scrolling=False
+        )
+
+with tab_analytics:
+    st.markdown("**Resumen por proveedor externo**")
+    st.caption("Los datos de esta pestaña respetan los filtros seleccionados en la barra lateral.")
+
+    df_provider = df_filtered.copy()
+
+    if df_provider.empty:
+        st.info("No hay datos para mostrar con los filtros actuales.")
+    else:
+        df_provider["Proveedor externo"] = (
+            df_provider["Proveedor externo"]
+            .fillna("-")
+            .astype(str)
+            .str.strip()
+            .replace("", "-")
+        )
+
+        estado_norm = (
+            df_provider["Estado"]
+            .fillna("")
+            .astype(str)
+            .str.strip()
+            .str.lower()
+        )
+
+        prioridad_norm = (
+            df_provider["Prioridad"]
+            .fillna("")
+            .astype(str)
+            .str.strip()
+            .str.lower()
+        )
+
+        responsable_norm = (
+            df_provider["Responsable"]
+            .fillna("")
+            .astype(str)
+            .str.strip()
+        )
+
+        estados_cerrados = {
+            "resuelta",
+            "resuelto",
+            "resolved",
+            "done",
+            "closed",
+            "cerrado",
+            "cerrada",
+            "cancelado",
+            "cancelada",
+            "canceled",
+            "cancelled"
+        }
+
+        estados_escalados = {
+            "escalated",
+            "escalado",
+            "escalada"
+        }
+
+        prioridades_altas = {
+            "highest",
+            "high",
+            "alta",
+            "muy alta",
+            "crítica",
+            "critica"
+        }
+
+        df_provider["_abierto"] = ~estado_norm.isin(estados_cerrados)
+        df_provider["_escalado"] = estado_norm.isin(estados_escalados)
+        df_provider["_prioridad_alta"] = prioridad_norm.isin(prioridades_altas)
+        df_provider["_sin_asignar"] = responsable_norm.isin(["", "Sin asignar"])
+
+        provider_summary = (
+            df_provider
+            .groupby("Proveedor externo", dropna=False)
+            .agg(
+                Tickets=("Clave", "count"),
+                Abiertos=("_abierto", "sum"),
+                Escalados=("_escalado", "sum"),
+                Alta_prioridad=("_prioridad_alta", "sum"),
+                Sin_asignar=("_sin_asignar", "sum")
+            )
+            .reset_index()
+        )
+
+        provider_summary["% Escalados"] = (
+            provider_summary["Escalados"] / provider_summary["Tickets"] * 100
+        ).round(1)
+
+        provider_summary = provider_summary.sort_values(
+            by=["Tickets", "Escalados", "Alta_prioridad"],
+            ascending=[False, False, False]
+        )
+
+        total_proveedores = provider_summary["Proveedor externo"].nunique()
+        proveedor_top = provider_summary.iloc[0]["Proveedor externo"]
+        tickets_top = int(provider_summary.iloc[0]["Tickets"])
+        total_escalados = int(provider_summary["Escalados"].sum())
+        total_sin_asignar = int(provider_summary["Sin_asignar"].sum())
+
+        kpi1, kpi2, kpi3, kpi4 = st.columns(4)
+
+        kpi1.metric("Proveedores", total_proveedores)
+        kpi2.metric("Proveedor con más tickets", proveedor_top, f"{tickets_top} tickets")
+        kpi3.metric("Tickets escalados", total_escalados)
+        kpi4.metric("Sin asignar", total_sin_asignar)
+
+        st.markdown("**Tabla resumen por proveedor**")
+
+        provider_summary_display = provider_summary.rename(columns={
+            "Alta_prioridad": "Alta prioridad",
+            "Sin_asignar": "Sin asignar"
+        })
+
+        st.dataframe(
+            provider_summary_display,
+            hide_index=True,
+            use_container_width=True
+        )
+
+        st.markdown("---")
+
+        st.markdown("**Agrupación por proveedor externo**")
+
+        provider_options = provider_summary["Proveedor externo"].tolist()
+
+        selected_provider = st.selectbox(
+            "Selecciona un proveedor para ver sus tickets",
+            provider_options
+        )
+
+        provider_detail = df_provider[
+            df_provider["Proveedor externo"] == selected_provider
+        ].copy()
+
+        detail_columns = [
+            "Clave",
+            "Resumen",
+            "Estado",
+            "Responsable",
+            "Prioridad",
+            "Creado",
+            "Actualizado",
+            "URL"
+        ]
+
+        detail_columns = [
+            col for col in detail_columns
+            if col in provider_detail.columns
+        ]
+
+        st.dataframe(
+            provider_detail[detail_columns],
+            hide_index=True,
+            use_container_width=True
+        )
+
+        st.markdown("---")
+
+        st.markdown("**Dashboard de tendencias**")
+
+        trend_col1, trend_col2 = st.columns(2)
+
+        with trend_col1:
+            st.markdown("**Tickets por proveedor**")
+
+            tickets_by_provider = (
+                provider_summary
+                .set_index("Proveedor externo")["Tickets"]
+                .sort_values(ascending=False)
+            )
+
+            st.bar_chart(tickets_by_provider)
+
+        with trend_col2:
+            st.markdown("**Tickets por estado**")
+
+            tickets_by_status = (
+                df_provider
+                .groupby("Estado")["Clave"]
+                .count()
+                .sort_values(ascending=False)
+            )
+
+            st.bar_chart(tickets_by_status)
+
+        trend_col3, trend_col4 = st.columns(2)
+
+        with trend_col3:
+            st.markdown("**Tickets por prioridad**")
+
+            tickets_by_priority = (
+                df_provider
+                .groupby("Prioridad")["Clave"]
+                .count()
+                .sort_values(ascending=False)
+            )
+
+            st.bar_chart(tickets_by_priority)
+
+        with trend_col4:
+            st.markdown("**Tickets creados por día**")
+
+            df_trend = df_provider.dropna(subset=["_Creado_dt"]).copy()
+
+            if df_trend.empty:
+                st.info("No hay fechas válidas para generar la tendencia diaria.")
+            else:
+                df_trend["Día"] = df_trend["_Creado_dt"].dt.date
+
+                tickets_by_day = (
+                    df_trend
+                    .groupby("Día")["Clave"]
+                    .count()
+                    .sort_index()
+                )
+
+                st.bar_chart(tickets_by_day)
 
 with st.expander("Configuración de la consulta"):
     st.write("**Usuario conectado:**", current_user.get("display_name"))
