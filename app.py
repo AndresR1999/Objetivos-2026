@@ -846,7 +846,7 @@ def render_tickets_table(df_table):
                 width: 100%;
                 height: 720px;
                 overflow-y: auto;
-                overflow-x: auto;
+                overflow-x: hidden;
                 border: 1px solid #e5e7eb;
                 border-radius: 14px;
                 background: #ffffff;
@@ -855,13 +855,15 @@ def render_tickets_table(df_table):
 
             table.tickets-table {
                 width: 100%;
-                min-width: 1450px;
+                max-width: 100%;
                 border-collapse: separate;
                 border-spacing: 0;
                 table-layout: fixed;
-                font-size: 14px;
+                font-size: 13px;
                 background: #ffffff;
+                box-sizing: border-box;
             }
+
 
             .tickets-table th {
                 position: sticky;
@@ -869,7 +871,7 @@ def render_tickets_table(df_table):
                 background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
                 z-index: 2;
                 text-align: center;
-                padding: 12px 10px;
+                padding: 11px 8px;
                 border-bottom: 1px solid #dce1e8;
                 font-weight: 700;
                 color: #334155;
@@ -877,7 +879,7 @@ def render_tickets_table(df_table):
             }
 
             .tickets-table td {
-                padding: 11px 10px;
+                padding: 10px 8px;
                 border-bottom: 1px solid #eef2f7;
                 vertical-align: top;
                 color: #1f2937;
@@ -996,30 +998,30 @@ def render_tickets_table(df_table):
             }
 
             .col-resumen {
-                width: 520px;
+                width: 500px;
                 white-space: normal;
                 overflow-wrap: anywhere;
                 word-break: normal;
                 line-height: 1.35;
             }
-
+            
             .col-estado {
-                width: 140px;
+                width: 130px;
                 white-space: nowrap;
             }
-
+            
             .col-proveedor {
-                width: 150px;
+                width: 140px;
                 white-space: normal;
             }
-
+            
             .col-responsable {
-                width: 170px;
+                width: 160px;
                 white-space: normal;
             }
-
+            
             .col-prioridad {
-                width: 115px;
+                width: 105px;
                 white-space: nowrap;
             }
 
