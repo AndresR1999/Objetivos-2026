@@ -41,7 +41,7 @@ PROVEEDOR_BY_OBJECT_ID = {
     "309628": "Ferag",
     "309627": "Fives",
     "288794": "Macrolet",
-    # "XXXXX": "Vanderlande",
+    "288762": "Vanderlande",
 }
 
 auth = HTTPBasicAuth(JIRA_EMAIL, JIRA_API_TOKEN)
