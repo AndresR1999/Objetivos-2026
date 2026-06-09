@@ -5,6 +5,8 @@ from requests.auth import HTTPBasicAuth
 from datetime import datetime
 import re
 from html import unescape, escape
+import streamlit.components.v1 as components
+
 
 st.set_page_config(
     page_title="Visor de Tickets Jira",
@@ -743,126 +745,161 @@ existing_columns = [
 df_table = df_filtered[existing_columns].copy()
 
 def render_tickets_table(df_table):
-    html = """
-    <style>
-        .tickets-table-container {
-            width: 100%;
-            max-height: 750px;
-            overflow-y: auto;
-            overflow-x: auto;
-            border: 1px solid #e6e6e6;
-            border-radius: 8px;
-        }
+    def safe_text(value):
+        if pd.isna(value):
+            return ""
+        return escape(str(value))
 
-        table.tickets-table {
-            width: 100%;
-            border-collapse: collapse;
-            table-layout: fixed;
-            font-size: 14px;
-        }
+    html_parts = []
 
-        .tickets-table th {
-            position: sticky;
-            top: 0;
-            background-color: #f7f7f7;
-            z-index: 1;
-            text-align: left;
-            padding: 10px;
-            border-bottom: 1px solid #ddd;
-            font-weight: 600;
-        }
+    html_parts.append("""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <style>
+            html, body {
+                margin: 0;
+                padding: 0;
+                font-family: Arial, sans-serif;
+                background: white;
+            }
 
-        .tickets-table td {
-            padding: 10px;
-            border-bottom: 1px solid #eee;
-            vertical-align: top;
-            word-wrap: break-word;
-            overflow-wrap: break-word;
-        }
+            .tickets-table-container {
+                width: 100%;
+                height: 720px;
+                overflow-y: auto;
+                overflow-x: auto;
+                border: 1px solid #e6e6e6;
+                border-radius: 8px;
+                background: white;
+            }
 
-        .tickets-table tr:hover {
-            background-color: #fafafa;
-        }
+            table.tickets-table {
+                width: 100%;
+                min-width: 1450px;
+                border-collapse: collapse;
+                table-layout: fixed;
+                font-size: 14px;
+            }
 
-        .col-clave {
-            width: 90px;
-        }
+            .tickets-table th {
+                position: sticky;
+                top: 0;
+                background-color: #f7f7f7;
+                z-index: 2;
+                text-align: left;
+                padding: 10px;
+                border-bottom: 1px solid #ddd;
+                font-weight: 600;
+                color: #222;
+            }
 
-        .col-resumen {
-            width: 38%;
-            white-space: normal;
-            line-height: 1.35;
-        }
+            .tickets-table td {
+                padding: 10px;
+                border-bottom: 1px solid #eee;
+                vertical-align: top;
+                color: #222;
+            }
 
-        .col-estado {
-            width: 120px;
-        }
+            .tickets-table tr:hover {
+                background-color: #fafafa;
+            }
 
-        .col-proveedor {
-            width: 130px;
-        }
+            .col-clave {
+                width: 95px;
+                white-space: nowrap;
+            }
 
-        .col-responsable {
-            width: 140px;
-        }
+            .col-resumen {
+                width: 520px;
+                white-space: normal;
+                overflow-wrap: anywhere;
+                word-break: normal;
+                line-height: 1.35;
+            }
 
-        .col-creador {
-            width: 140px;
-        }
+            .col-estado {
+                width: 130px;
+                white-space: normal;
+            }
 
-        .col-prioridad {
-            width: 90px;
-        }
+            .col-proveedor {
+                width: 140px;
+                white-space: normal;
+            }
 
-        .col-creado {
-            width: 120px;
-        }
+            .col-responsable {
+                width: 160px;
+                white-space: normal;
+            }
 
-        .col-url {
-            width: 90px;
-        }
+            .col-creador {
+                width: 160px;
+                white-space: normal;
+            }
 
-        .tickets-table a {
-            color: #0068c9;
-            text-decoration: none;
-            font-weight: 500;
-        }
+            .col-prioridad {
+                width: 100px;
+                white-space: nowrap;
+            }
 
-        .tickets-table a:hover {
-            text-decoration: underline;
-        }
-    </style>
+            .col-creado {
+                width: 135px;
+                white-space: nowrap;
+            }
 
-    <div class="tickets-table-container">
-        <table class="tickets-table">
-            <thead>
-                <tr>
-                    <th class="col-clave">Clave</th>
-                    <th class="col-resumen">Resumen</th>
-                    <th class="col-estado">Estado</th>
-                    <th class="col-proveedor">Proveedor externo</th>
-                    <th class="col-responsable">Responsable</th>
-                    <th class="col-creador">Creador</th>
-                    <th class="col-prioridad">Prioridad</th>
-                    <th class="col-creado">Creado</th>
-                    <th class="col-url">Jira</th>
-                </tr>
-            </thead>
-            <tbody>
-    """
+            .col-url {
+                width: 80px;
+                white-space: nowrap;
+            }
+
+            .tickets-table a {
+                color: #0068c9;
+                text-decoration: none;
+                font-weight: 500;
+            }
+
+            .tickets-table a:hover {
+                text-decoration: underline;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="tickets-table-container">
+            <table class="tickets-table">
+                <thead>
+                    <tr>
+                        <th class="col-clave">Clave</th>
+                        <th class="col-resumen">Resumen</th>
+                        <th class="col-estado">Estado</th>
+                        <th class="col-proveedor">Proveedor externo</th>
+                        <th class="col-responsable">Responsable</th>
+                        <th class="col-creador">Creador</th>
+                        <th class="col-prioridad">Prioridad</th>
+                        <th class="col-creado">Creado</th>
+                        <th class="col-url">Jira</th>
+                    </tr>
+                </thead>
+                <tbody>
+    """)
 
     for _, row in df_table.iterrows():
-        clave = escape(str(row.get("Clave", "")))
-        resumen = escape(str(row.get("Resumen", "")))
-        estado = escape(str(row.get("Estado", "")))
-        proveedor = escape(str(row.get("Proveedor externo", "")))
-        responsable = escape(str(row.get("Responsable", "")))
-        creador = escape(str(row.get("Creador", "")))
-        prioridad = escape(str(row.get("Prioridad", "")))
-        creado = escape(str(row.get("Creado", "")))
+        clave = safe_text(row.get("Clave", ""))
+        resumen = safe_text(row.get("Resumen", ""))
+        estado = safe_text(row.get("Estado", ""))
+        proveedor = safe_text(row.get("Proveedor externo", ""))
+        responsable = safe_text(row.get("Responsable", ""))
+        creador = safe_text(row.get("Creador", ""))
+        prioridad = safe_text(row.get("Prioridad", ""))
+        creado = safe_text(row.get("Creado", ""))
         url = escape(str(row.get("URL", "")), quote=True)
 
-        html += f"""
+        if url:
+            jira_link = f'<a href="{url}" target="_blank" rel="noopener noreferrer">Abrir</a>'
+        else:
+            jira_link = ""
+
+        html_parts.append(f"""
             <tr>
                 <td class="col-clave">{clave}</td>
                 <td class="col-resumen">{resumen}</td>
@@ -872,23 +909,28 @@ def render_tickets_table(df_table):
                 <td class="col-creador">{creador}</td>
                 <td class="col-prioridad">{prioridad}</td>
                 <td class="col-creado">{creado}</td>
-                <td class="col-url"><a href="{url}" target="_blank">Abrir</a></td>
+                <td class="col-url">{jira_link}</td>
             </tr>
-        """
+        """)
 
-    html += """
-            </tbody>
-        </table>
-    </div>
-    """
+    html_parts.append("""
+                </tbody>
+            </table>
+        </div>
+    </body>
+    </html>
+    """)
 
-    return html
+    return "".join(html_parts)
 
-
-st.markdown(
-    render_tickets_table(df_table),
-    unsafe_allow_html=True
-)
+if df_table.empty:
+    st.info("No hay tickets que coincidan con los filtros seleccionados.")
+else:
+    components.html(
+        render_tickets_table(df_table),
+        height=760,
+        scrolling=False
+    )
 
 with st.expander("Configuración de la consulta"):
     st.write("**Usuario conectado:**", current_user.get("display_name"))
