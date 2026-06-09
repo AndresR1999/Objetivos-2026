@@ -552,6 +552,20 @@ if df.empty:
     st.warning("No se han encontrado tickets con la consulta configurada.")
     st.stop()
 
+columns_with_dash_when_empty = [
+    "Proveedor externo",
+    "Prioridad"
+]
+
+for col in columns_with_dash_when_empty:
+    if col in df.columns:
+        df[col] = (
+            df[col]
+            .fillna("")
+            .astype(str)
+            .str.strip()
+            .replace("", "-")
+        )
 
 st.sidebar.header("🔎 Filtros")
 
