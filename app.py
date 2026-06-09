@@ -20,7 +20,7 @@ JIRA_BASE_URL = st.secrets["JIRA_BASE_URL"].rstrip("/")
 JIRA_EMAIL = st.secrets["JIRA_EMAIL"]
 JIRA_API_TOKEN = st.secrets["JIRA_API_TOKEN"]
 
-JIRA_JQL = st.secrets.get("JIRA_JQL", "project = AUTM ORDER BY updated DESC")
+JIRA_JQL = st.secrets.get("JIRA_JQL", "project = AUTM ORDER BY created DESC")
 JIRA_MAX_RESULTS = int(st.secrets.get("JIRA_MAX_RESULTS", 300))
 JIRA_PROVEEDOR_FIELD_NAME = st.secrets.get(
     "JIRA_PROVEEDOR_FIELD_NAME",
@@ -684,6 +684,19 @@ if proyecto_sel:
 
 if prioridad_sel:
     df_filtered = df_filtered[df_filtered["Prioridad"].isin(prioridad_sel)]
+
+df_filtered = df_filtered.copy()
+
+df_filtered["_Creado_dt"] = pd.to_datetime(
+    df_filtered["Creado"],
+    format="%d/%m/%Y %H:%M",
+    errors="coerce"
+)
+
+df_filtered = df_filtered.sort_values(
+    by="_Creado_dt",
+    ascending=False
+)
 
 total_tickets = len(df)
 filtered_tickets = len(df_filtered)
