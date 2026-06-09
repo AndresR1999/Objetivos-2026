@@ -700,11 +700,7 @@ columns_to_show = [
     "Responsable",
     "Creador",
     "Prioridad",
-    "Tipo",
-    "Proyecto",
-    "Labels",
     "Creado",
-    "Actualizado",
     "URL"
 ]
 
