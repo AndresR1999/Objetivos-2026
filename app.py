@@ -868,7 +868,7 @@ def render_tickets_table(df_table):
                 top: 0;
                 background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
                 z-index: 2;
-                text-align: left;
+                text-align: center;
                 padding: 12px 10px;
                 border-bottom: 1px solid #dce1e8;
                 font-weight: 700;
@@ -881,6 +881,7 @@ def render_tickets_table(df_table):
                 border-bottom: 1px solid #eef2f7;
                 vertical-align: top;
                 color: #1f2937;
+                text-align: center;
             }
 
             .tickets-table tr:nth-child(odd) {
@@ -1032,6 +1033,11 @@ def render_tickets_table(df_table):
                 width: 80px;
                 white-space: nowrap;
                 text-align: center;
+            }
+
+            .tickets-table td.col-clave,
+            .tickets-table td.col-resumen {
+                text-align: left;
             }
 
             .tickets-table a {
