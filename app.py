@@ -1224,9 +1224,19 @@ with tab_analytics:
             ascending=[False, False, False]
         )
 
-        total_proveedores = provider_summary["Proveedor externo"].nunique()
-        proveedor_top = provider_summary.iloc[0]["Proveedor externo"]
-        tickets_top = int(provider_summary.iloc[0]["Tickets"])
+        provider_summary_real = provider_summary[
+            provider_summary["Proveedor externo"].astype(str).str.strip() != "-"
+        ].copy()
+        
+        total_proveedores = provider_summary_real["Proveedor externo"].nunique()
+        
+        if provider_summary_real.empty:
+            proveedor_top = "Sin proveedor"
+            tickets_top = 0
+        else:
+            proveedor_top = provider_summary_real.iloc[0]["Proveedor externo"]
+            tickets_top = int(provider_summary_real.iloc[0]["Tickets"])
+
         total_escalados = int(provider_summary["Escalados"].sum())
         total_sin_asignar = int(provider_summary["Sin_asignar"].sum())
 
