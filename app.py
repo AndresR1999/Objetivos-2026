@@ -566,10 +566,40 @@ for col in columns_with_dash_when_empty:
             .replace("", "-")
         )
 
+def split_external_providers(value):
+    if pd.isna(value):
+        return []
+
+    text = str(value).strip()
+
+    if not text or text == "-":
+        return []
+
+    providers = re.split(r"\s*,\s*|\s*;\s*|\s*\|\s*", text)
+
+    clean_providers = []
+
+    for provider in providers:
+        provider = provider.strip()
+
+        if provider and provider != "-":
+            clean_providers.append(provider)
+
+    return list(dict.fromkeys(clean_providers))
+
+
+df["_proveedores_lista"] = df["Proveedor externo"].apply(split_external_providers)
+
 st.sidebar.header("🔎 Filtros")
 
 estados = sorted([x for x in df["Estado"].dropna().unique() if x])
-proveedores = sorted([x for x in df["Proveedor externo"].dropna().unique() if x])
+proveedores = sorted(
+    {
+        proveedor
+        for proveedores_ticket in df["_proveedores_lista"]
+        for proveedor in proveedores_ticket
+    }
+)
 responsables = sorted([x for x in df["Responsable"].dropna().unique() if x])
 creadores = sorted([x for x in df["Creador"].dropna().unique() if x])
 tipos = sorted([x for x in df["Tipo"].dropna().unique() if x])
@@ -658,8 +688,13 @@ df_filtered = df.copy()
 if texto:
     texto_lower = texto.lower()
 
+    columnas_busqueda = [
+        col for col in df_filtered.columns
+        if not col.startswith("_")
+    ]
+
     df_filtered = df_filtered[
-        df_filtered.astype(str).apply(
+        df_filtered[columnas_busqueda].astype(str).apply(
             lambda row: row.str.lower().str.contains(texto_lower, na=False)
         ).any(axis=1)
     ]
@@ -684,7 +719,15 @@ if estado_sel:
     df_filtered = df_filtered[df_filtered["Estado"].isin(estado_sel)]
 
 if proveedor_sel:
-    df_filtered = df_filtered[df_filtered["Proveedor externo"].isin(proveedor_sel)]
+    df_filtered = df_filtered[
+        df_filtered["_proveedores_lista"].apply(
+            lambda proveedores_ticket: any(
+                proveedor in proveedores_ticket
+                for proveedor in proveedor_sel
+            )
+        )
+    ]
+
 
 if responsable_sel:
     df_filtered = df_filtered[df_filtered["Responsable"].isin(responsable_sel)]
@@ -735,36 +778,10 @@ if not proveedor_field_id:
         "Revisa que el nombre del campo coincida exactamente con Jira."
     )
 
-def split_external_providers(value):
-    if pd.isna(value):
-        return []
-
-    text = str(value).strip()
-
-    if not text or text == "-":
-        return []
-
-    providers = re.split(r"\s*,\s*|\s*;\s*|\s*\|\s*", text)
-
-    clean_providers = []
-
-    for provider in providers:
-        provider = provider.strip()
-
-        if provider and provider != "-":
-            clean_providers.append(provider)
-
-    return list(dict.fromkeys(clean_providers))
-
-
 tab_tickets, tab_analytics = st.tabs([
     "📋 Tickets",
     "📊 Proveedores y tendencias"
 ])
-
-with tab_tickets:
-    st.markdown("**Tabla de tickets**")
-
 
 columns_to_show = [
     "Clave",
@@ -1140,6 +1157,8 @@ def render_tickets_table(df_table):
     return "".join(html_parts)
 
 with tab_tickets:
+    st.markdown("**Tabla de tickets**")
+
     if df_table.empty:
         st.info("No hay tickets que coincidan con los filtros seleccionados.")
     else:
@@ -1223,9 +1242,10 @@ with tab_analytics:
         df_provider["_prioridad_alta"] = prioridad_norm.isin(prioridades_altas)
         df_provider["_sin_asignar"] = responsable_norm.isin(["", "Sin asignar"])
 
-        df_provider["_proveedores_lista"] = df_provider["Proveedor externo"].apply(
-            split_external_providers
-        )
+        if "_proveedores_lista" not in df_provider.columns:
+            df_provider["_proveedores_lista"] = df_provider["Proveedor externo"].apply(
+                split_external_providers
+            )
 
         df_provider_exploded = (
             df_provider
