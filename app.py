@@ -1764,10 +1764,13 @@ with tab_analytics:
                 if col in provider_detail.columns
             ]
 
+            detail_max_height = 520 if len(provider_detail) > 20 else None
+
             st.markdown(
                 render_static_html_table(
                     provider_detail[detail_columns],
-                    url_column="URL"
+                    url_column="URL",
+                    max_height=detail_max_height
                 ),
                 unsafe_allow_html=True
             )
