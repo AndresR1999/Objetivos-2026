@@ -553,6 +553,29 @@ if df.empty:
 
 st.sidebar.header("🔎 Filtros")
 
+estados = sorted([x for x in df["Estado"].dropna().unique() if x])
+proveedores = sorted([x for x in df["Proveedor externo"].dropna().unique() if x])
+responsables = sorted([x for x in df["Responsable"].dropna().unique() if x])
+creadores = sorted([x for x in df["Creador"].dropna().unique() if x])
+tipos = sorted([x for x in df["Tipo"].dropna().unique() if x])
+proyectos = sorted([x for x in df["Proyecto"].dropna().unique() if x])
+prioridades = sorted([x for x in df["Prioridad"].dropna().unique() if x])
+
+DEFAULT_TIPO_SEL = ["Incident"] if "Incident" in tipos else []
+DEFAULT_PROYECTO_SEL = ["Automatistas Lliçà"] if "Automatistas Lliçà" in proyectos else []
+
+st.sidebar.markdown("---")
+
+if st.sidebar.button("🗑️ Borrar filtros", use_container_width=True):
+    reset_filters()
+    st.rerun()
+
+if st.sidebar.button("🔄 Refrescar datos", use_container_width=True):
+    st.cache_data.clear()
+    st.rerun()
+
+st.sidebar.markdown("---")
+
 texto = st.sidebar.text_input(
     "Buscar",
     key="f_texto",
@@ -569,18 +592,6 @@ vista = st.sidebar.radio(
     ],
     key="f_vista"
 )
-
-estados = sorted([x for x in df["Estado"].dropna().unique() if x])
-proveedores = sorted([x for x in df["Proveedor externo"].dropna().unique() if x])
-responsables = sorted([x for x in df["Responsable"].dropna().unique() if x])
-creadores = sorted([x for x in df["Creador"].dropna().unique() if x])
-tipos = sorted([x for x in df["Tipo"].dropna().unique() if x])
-proyectos = sorted([x for x in df["Proyecto"].dropna().unique() if x])
-prioridades = sorted([x for x in df["Prioridad"].dropna().unique() if x])
-
-DEFAULT_TIPO_SEL = ["Incident"] if "Incident" in tipos else []
-DEFAULT_PROYECTO_SEL = ["Automatistas Lliçà"] if "Automatistas Lliçà" in proyectos else []
-
 
 estado_sel = st.sidebar.multiselect(
     "Estado del ticket",
@@ -625,16 +636,6 @@ prioridad_sel = st.sidebar.multiselect(
     prioridades,
     key="f_prioridad"
 )
-
-st.sidebar.markdown("---")
-
-if st.sidebar.button("🗑️ Borrar filtros", use_container_width=True):
-    reset_filters()
-    st.rerun()
-
-if st.sidebar.button("🔄 Refrescar datos", use_container_width=True):
-    st.cache_data.clear()
-    st.rerun()
 
 
 df_filtered = df.copy()
