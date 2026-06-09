@@ -423,6 +423,20 @@ def format_date(date_value):
     except Exception:
         return date_value
 
+def classify_shift(created_dt):
+    if pd.isna(created_dt):
+        return "Sin fecha"
+
+    hour = created_dt.hour
+
+    if 7 <= hour < 15:
+        return "Mañana"
+
+    if 15 <= hour < 23:
+        return "Tarde"
+
+    return "Noche"
+
 
 @st.cache_data(ttl=300)
 def get_jira_issues(jql, max_results, proveedor_field_name):
@@ -532,6 +546,7 @@ def reset_filters():
     st.session_state["f_vista"] = "Todos"
     st.session_state["f_estado"] = []
     st.session_state["f_proveedor"] = []
+    st.session_state["f_turno"] = []
     st.session_state["f_responsable"] = []
     st.session_state["f_creador"] = []
     st.session_state["f_tipo"] = DEFAULT_TIPO_SEL
@@ -569,6 +584,14 @@ for col in columns_with_dash_when_empty:
             .replace("", "-")
         )
 
+df["_Creado_dt"] = pd.to_datetime(
+    df["Creado"],
+    format="%d/%m/%Y %H:%M",
+    errors="coerce"
+)
+
+df["Turno"] = df["_Creado_dt"].apply(classify_shift)
+
 def split_external_providers(value):
     if pd.isna(value):
         return []
@@ -603,6 +626,12 @@ proveedores = sorted(
         for proveedor in proveedores_ticket
     }
 )
+turnos_orden = ["Mañana", "Tarde", "Noche", "Sin fecha"]
+
+turnos = [
+    turno for turno in turnos_orden
+    if turno in df["Turno"].dropna().unique()
+]
 responsables = sorted([x for x in df["Responsable"].dropna().unique() if x])
 creadores = sorted([x for x in df["Creador"].dropna().unique() if x])
 tipos = sorted([x for x in df["Tipo"].dropna().unique() if x])
@@ -651,6 +680,12 @@ proveedor_sel = st.sidebar.multiselect(
     "Proveedor externo",
     proveedores,
     key="f_proveedor"
+)
+
+turno_sel = st.sidebar.multiselect(
+    "Turno",
+    turnos,
+    key="f_turno"
 )
 
 responsable_sel = st.sidebar.multiselect(
@@ -731,6 +766,8 @@ if proveedor_sel:
         )
     ]
 
+if turno_sel:
+    df_filtered = df_filtered[df_filtered["Turno"].isin(turno_sel)]
 
 if responsable_sel:
     df_filtered = df_filtered[df_filtered["Responsable"].isin(responsable_sel)]
@@ -748,12 +785,6 @@ if prioridad_sel:
     df_filtered = df_filtered[df_filtered["Prioridad"].isin(prioridad_sel)]
 
 df_filtered = df_filtered.copy()
-
-df_filtered["_Creado_dt"] = pd.to_datetime(
-    df_filtered["Creado"],
-    format="%d/%m/%Y %H:%M",
-    errors="coerce"
-)
 
 df_filtered = df_filtered.sort_values(
     by="_Creado_dt",
