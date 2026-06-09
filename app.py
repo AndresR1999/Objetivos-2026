@@ -7,6 +7,7 @@ import re
 from html import unescape, escape
 import streamlit.components.v1 as components
 import unicodedata
+import matplotlib.pyplot as plt
 
 st.set_page_config(
     page_title="Visor de Tickets Jira",
@@ -1168,6 +1169,44 @@ with tab_tickets:
             scrolling=False
         )
 
+def render_static_bar_chart(series, xlabel="", ylabel="Tickets", color="#2563eb"):
+    if series is None or series.empty:
+        st.info("No hay datos para generar el gráfico.")
+        return
+
+    chart_data = series.copy()
+
+    chart_data.index = chart_data.index.map(
+        lambda value: value.strftime("%d/%m/%Y") if hasattr(value, "strftime") else str(value)
+    )
+
+    fig_width = max(6, min(14, len(chart_data) * 0.8))
+    fig, ax = plt.subplots(figsize=(fig_width, 4))
+
+    ax.bar(
+        chart_data.index,
+        chart_data.values,
+        color=color
+    )
+
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+
+    ax.grid(
+        axis="y",
+        linestyle="--",
+        alpha=0.25
+    )
+
+    ax.tick_params(axis="x", rotation=45)
+
+    for label in ax.get_xticklabels():
+        label.set_horizontalalignment("right")
+
+    fig.tight_layout()
+
+    st.pyplot(fig, clear_figure=True)
+
 with tab_analytics:
     st.markdown("**Resumen por proveedor externo**")
     st.caption("Los datos de esta pestaña respetan los filtros seleccionados en la barra lateral.")
@@ -1407,7 +1446,13 @@ with tab_analytics:
                     .sort_values(ascending=False)
                 )
 
-                st.bar_chart(tickets_by_provider)
+                render_static_bar_chart(
+                    tickets_by_provider,
+                    xlabel="Proveedor externo",
+                    ylabel="Tickets",
+                    color="#2563eb"
+                )
+
 
         with trend_col2:
             st.markdown("**Tickets por estado**")
@@ -1419,7 +1464,12 @@ with tab_analytics:
                 .sort_values(ascending=False)
             )
 
-            st.bar_chart(tickets_by_status)
+            render_static_bar_chart(
+                tickets_by_status,
+                xlabel="Estado",
+                ylabel="Tickets",
+                color="#16a34a"
+            )
 
         trend_col3, trend_col4 = st.columns(2)
 
@@ -1433,7 +1483,12 @@ with tab_analytics:
                 .sort_values(ascending=False)
             )
 
-            st.bar_chart(tickets_by_priority)
+            render_static_bar_chart(
+                tickets_by_priority,
+                xlabel="Prioridad",
+                ylabel="Tickets",
+                color="#f97316"
+            )
 
         with trend_col4:
             st.markdown("**Tickets creados por día**")
@@ -1452,8 +1507,12 @@ with tab_analytics:
                     .sort_index()
                 )
 
-                st.bar_chart(tickets_by_day)
-
+                render_static_bar_chart(
+                    tickets_by_day,
+                    xlabel="Día",
+                    ylabel="Tickets",
+                    color="#7c3aed"
+                )
 
 with st.expander("Configuración de la consulta"):
     st.write("**Usuario conectado:**", current_user.get("display_name"))
