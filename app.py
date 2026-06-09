@@ -36,6 +36,8 @@ PROVEEDOR_BY_OBJECT_ID = {
     "288761": "PSB",
     "309628": "Ferag",
     # "XXXXX": "Fives",
+    # "XXXXX": "Macrolet",
+    # "XXXXX": "Vanderlande",
 }
 
 auth = HTTPBasicAuth(JIRA_EMAIL, JIRA_API_TOKEN)
@@ -348,29 +350,16 @@ def pick_asset_name(asset_data):
 @st.cache_data(ttl=3600)
 def resolve_asset_object_name(workspace_id, object_id):
     """
-    Intenta resolver un objeto de Jira Assets a nombre legible.
-    Probamos varios endpoints porque Atlassian puede exponer Assets
-    de forma diferente según la configuración del site.
+    Convierte el objectId interno de Jira Assets al proveedor externo real.
     """
 
-    endpoints = [
-        f"/rest/servicedeskapi/assets/workspace/{workspace_id}/v1/object/{object_id}",
-        f"/rest/assets/1.0/object/{object_id}",
-        f"/rest/insight/1.0/object/{object_id}"
-    ]
+    object_id = str(object_id)
 
-    for endpoint in endpoints:
-        data = jira_get_optional(endpoint)
-
-        if not data:
-            continue
-
-        name = pick_asset_name(data)
-
-        if name:
-            return name
+    if object_id in PROVEEDOR_BY_OBJECT_ID:
+        return PROVEEDOR_BY_OBJECT_ID[object_id]
 
     return f"Objeto {object_id}"
+
 
 
 def extract_provider_value(raw_value, rendered_value=None):
