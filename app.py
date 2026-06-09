@@ -530,8 +530,10 @@ def reset_filters():
     st.session_state["f_proveedor"] = []
     st.session_state["f_responsable"] = []
     st.session_state["f_creador"] = []
-    st.session_state["f_tipo"] = []
+    st.session_state["f_tipo"] = DEFAULT_TIPO_SEL
+    st.session_state["f_proyecto"] = DEFAULT_PROYECTO_SEL
     st.session_state["f_prioridad"] = []
+
 
 
 with st.spinner("Cargando información desde Jira..."):
@@ -573,7 +575,12 @@ proveedores = sorted([x for x in df["Proveedor externo"].dropna().unique() if x]
 responsables = sorted([x for x in df["Responsable"].dropna().unique() if x])
 creadores = sorted([x for x in df["Creador"].dropna().unique() if x])
 tipos = sorted([x for x in df["Tipo"].dropna().unique() if x])
+proyectos = sorted([x for x in df["Proyecto"].dropna().unique() if x])
 prioridades = sorted([x for x in df["Prioridad"].dropna().unique() if x])
+
+DEFAULT_TIPO_SEL = ["Incident"] if "Incident" in tipos else []
+DEFAULT_PROYECTO_SEL = ["Automatistas Lliçà"] if "Automatistas Lliçà" in proyectos else []
+
 
 estado_sel = st.sidebar.multiselect(
     "Estado del ticket",
@@ -602,7 +609,15 @@ creador_sel = st.sidebar.multiselect(
 tipo_sel = st.sidebar.multiselect(
     "Tipo de solicitud",
     tipos,
+    default=DEFAULT_TIPO_SEL,
     key="f_tipo"
+)
+
+proyecto_sel = st.sidebar.multiselect(
+    "Proyecto",
+    proyectos,
+    default=DEFAULT_PROYECTO_SEL,
+    key="f_proyecto"
 )
 
 prioridad_sel = st.sidebar.multiselect(
@@ -664,9 +679,11 @@ if creador_sel:
 if tipo_sel:
     df_filtered = df_filtered[df_filtered["Tipo"].isin(tipo_sel)]
 
+if proyecto_sel:
+    df_filtered = df_filtered[df_filtered["Proyecto"].isin(proyecto_sel)]
+
 if prioridad_sel:
     df_filtered = df_filtered[df_filtered["Prioridad"].isin(prioridad_sel)]
-
 
 total_tickets = len(df)
 filtered_tickets = len(df_filtered)
@@ -737,22 +754,4 @@ with st.expander("Configuración de la consulta"):
         )
     else:
         st.warning("Campo de proveedor no encontrado.")
-
-with st.expander("Diagnóstico proveedor externo"):
-    st.write("Campo configurado:", JIRA_PROVEEDOR_FIELD_NAME)
-    st.write("Campo Jira detectado:", proveedor_field_id)
-
-    sample_rows = df[
-        df["Proveedor externo"].astype(str).str.contains("Objeto", na=False)
-    ]
-
-    if sample_rows.empty:
-        st.info("No hay filas con proveedor tipo Objeto para diagnosticar.")
-    else:
-        st.write("Ejemplo detectado:")
-        st.dataframe(
-            sample_rows[["Clave", "Proveedor externo", "URL"]].head(5),
-            use_container_width=True,
-            hide_index=True
-        )
 
