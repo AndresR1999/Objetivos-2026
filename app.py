@@ -735,11 +735,32 @@ if not proveedor_field_id:
         "Revisa que el nombre del campo coincida exactamente con Jira."
     )
 
+def split_external_providers(value):
+    if pd.isna(value):
+        return []
+
+    text = str(value).strip()
+
+    if not text or text == "-":
+        return []
+
+    providers = re.split(r"\s*,\s*|\s*;\s*|\s*\|\s*", text)
+
+    clean_providers = []
+
+    for provider in providers:
+        provider = provider.strip()
+
+        if provider and provider != "-":
+            clean_providers.append(provider)
+
+    return list(dict.fromkeys(clean_providers))
+
+
 tab_tickets, tab_analytics = st.tabs([
     "📋 Tickets",
     "📊 Proveedores y tendencias"
 ])
-
 
 with tab_tickets:
     st.markdown("**Tabla de tickets**")
@@ -1202,63 +1223,105 @@ with tab_analytics:
         df_provider["_prioridad_alta"] = prioridad_norm.isin(prioridades_altas)
         df_provider["_sin_asignar"] = responsable_norm.isin(["", "Sin asignar"])
 
-        provider_summary = (
+        df_provider["_proveedores_lista"] = df_provider["Proveedor externo"].apply(
+            split_external_providers
+        )
+
+        df_provider_exploded = (
             df_provider
-            .groupby("Proveedor externo", dropna=False)
-            .agg(
-                Tickets=("Clave", "count"),
-                Abiertos=("_abierto", "sum"),
-                Escalados=("_escalado", "sum"),
-                Alta_prioridad=("_prioridad_alta", "sum"),
-                Sin_asignar=("_sin_asignar", "sum")
-            )
-            .reset_index()
+            .explode("_proveedores_lista")
+            .rename(columns={"_proveedores_lista": "Proveedor"})
         )
 
-        provider_summary["% Escalados"] = (
-            provider_summary["Escalados"] / provider_summary["Tickets"] * 100
-        ).round(1)
+        df_provider_exploded = df_provider_exploded.dropna(subset=["Proveedor"])
 
-        provider_summary = provider_summary.sort_values(
-            by=["Tickets", "Escalados", "Alta_prioridad"],
-            ascending=[False, False, False]
+        df_provider_exploded["Proveedor"] = (
+            df_provider_exploded["Proveedor"]
+            .astype(str)
+            .str.strip()
         )
 
-        provider_summary_real = provider_summary[
-            provider_summary["Proveedor externo"].astype(str).str.strip() != "-"
+        df_provider_exploded = df_provider_exploded[
+            df_provider_exploded["Proveedor"] != ""
         ].copy()
-        
-        total_proveedores = provider_summary_real["Proveedor externo"].nunique()
-        
-        if provider_summary_real.empty:
+
+        df_provider_exploded = df_provider_exploded.drop_duplicates(
+            subset=["Clave", "Proveedor"]
+        )
+
+        if df_provider_exploded.empty:
+            provider_summary = pd.DataFrame(columns=[
+                "Proveedor externo",
+                "Tickets",
+                "Abiertos",
+                "Escalados",
+                "Alta_prioridad",
+                "Sin_asignar",
+                "% Escalados"
+            ])
+        else:
+            provider_summary = (
+                df_provider_exploded
+                .groupby("Proveedor", dropna=False)
+                .agg(
+                    Tickets=("Clave", "nunique"),
+                    Abiertos=("_abierto", "sum"),
+                    Escalados=("_escalado", "sum"),
+                    Alta_prioridad=("_prioridad_alta", "sum"),
+                    Sin_asignar=("_sin_asignar", "sum")
+                )
+                .reset_index()
+                .rename(columns={"Proveedor": "Proveedor externo"})
+            )
+
+            provider_summary["% Escalados"] = (
+                provider_summary["Escalados"] / provider_summary["Tickets"] * 100
+            ).round(1)
+
+            provider_summary = provider_summary.sort_values(
+                by=["Tickets", "Escalados", "Alta_prioridad"],
+                ascending=[False, False, False]
+            )
+
+        total_proveedores = provider_summary["Proveedor externo"].nunique()
+
+        tickets_sin_proveedor = int(
+            df_provider["_proveedores_lista"].apply(len).eq(0).sum()
+        )
+
+        if provider_summary.empty:
             proveedor_top = "Sin proveedor"
             tickets_top = 0
+            total_escalados = 0
+            total_sin_asignar = 0
         else:
-            proveedor_top = provider_summary_real.iloc[0]["Proveedor externo"]
-            tickets_top = int(provider_summary_real.iloc[0]["Tickets"])
-
-        total_escalados = int(provider_summary["Escalados"].sum())
-        total_sin_asignar = int(provider_summary["Sin_asignar"].sum())
+            proveedor_top = provider_summary.iloc[0]["Proveedor externo"]
+            tickets_top = int(provider_summary.iloc[0]["Tickets"])
+            total_escalados = int(provider_summary["Escalados"].sum())
+            total_sin_asignar = int(provider_summary["Sin_asignar"].sum())
 
         kpi1, kpi2, kpi3, kpi4 = st.columns(4)
 
-        kpi1.metric("Proveedores", total_proveedores)
+        kpi1.metric("Proveedores reales", total_proveedores)
         kpi2.metric("Proveedor con más tickets", proveedor_top, f"{tickets_top} tickets")
         kpi3.metric("Tickets escalados", total_escalados)
-        kpi4.metric("Sin asignar", total_sin_asignar)
+        kpi4.metric("Sin proveedor externo", tickets_sin_proveedor)
 
         st.markdown("**Tabla resumen por proveedor**")
 
-        provider_summary_display = provider_summary.rename(columns={
-            "Alta_prioridad": "Alta prioridad",
-            "Sin_asignar": "Sin asignar"
-        })
+        if provider_summary.empty:
+            st.info("No hay proveedores externos asignados en los tickets filtrados.")
+        else:
+            provider_summary_display = provider_summary.rename(columns={
+                "Alta_prioridad": "Alta prioridad",
+                "Sin_asignar": "Sin asignar"
+            })
 
-        st.dataframe(
-            provider_summary_display,
-            hide_index=True,
-            use_container_width=True
-        )
+            st.dataframe(
+                provider_summary_display,
+                hide_index=True,
+                use_container_width=True
+            )
 
         st.markdown("---")
 
@@ -1266,36 +1329,45 @@ with tab_analytics:
 
         provider_options = provider_summary["Proveedor externo"].tolist()
 
-        selected_provider = st.selectbox(
-            "Selecciona un proveedor para ver sus tickets",
-            provider_options
-        )
+        if not provider_options:
+            st.info("No hay proveedores externos asignados en los tickets filtrados.")
+        else:
+            selected_provider = st.selectbox(
+                "Selecciona un proveedor para ver sus tickets",
+                provider_options
+            )
 
-        provider_detail = df_provider[
-            df_provider["Proveedor externo"] == selected_provider
-        ].copy()
+            provider_detail_keys = df_provider_exploded.loc[
+                df_provider_exploded["Proveedor"] == selected_provider,
+                "Clave"
+            ].unique()
 
-        detail_columns = [
-            "Clave",
-            "Resumen",
-            "Estado",
-            "Responsable",
-            "Prioridad",
-            "Creado",
-            "Actualizado",
-            "URL"
-        ]
+            provider_detail = df_provider[
+                df_provider["Clave"].isin(provider_detail_keys)
+            ].copy()
 
-        detail_columns = [
-            col for col in detail_columns
-            if col in provider_detail.columns
-        ]
+            detail_columns = [
+                "Clave",
+                "Resumen",
+                "Estado",
+                "Proveedor externo",
+                "Responsable",
+                "Prioridad",
+                "Creado",
+                "Actualizado",
+                "URL"
+            ]
 
-        st.dataframe(
-            provider_detail[detail_columns],
-            hide_index=True,
-            use_container_width=True
-        )
+            detail_columns = [
+                col for col in detail_columns
+                if col in provider_detail.columns
+            ]
+
+            st.dataframe(
+                provider_detail[detail_columns],
+                hide_index=True,
+                use_container_width=True
+            )
 
         st.markdown("---")
 
@@ -1306,13 +1378,16 @@ with tab_analytics:
         with trend_col1:
             st.markdown("**Tickets por proveedor**")
 
-            tickets_by_provider = (
-                provider_summary
-                .set_index("Proveedor externo")["Tickets"]
-                .sort_values(ascending=False)
-            )
+            if provider_summary.empty:
+                st.info("No hay proveedores externos para generar el gráfico.")
+            else:
+                tickets_by_provider = (
+                    provider_summary
+                    .set_index("Proveedor externo")["Tickets"]
+                    .sort_values(ascending=False)
+                )
 
-            st.bar_chart(tickets_by_provider)
+                st.bar_chart(tickets_by_provider)
 
         with trend_col2:
             st.markdown("**Tickets por estado**")
@@ -1358,6 +1433,7 @@ with tab_analytics:
                 )
 
                 st.bar_chart(tickets_by_day)
+
 
 with st.expander("Configuración de la consulta"):
     st.write("**Usuario conectado:**", current_user.get("display_name"))
