@@ -35,8 +35,8 @@ PROVEEDOR_BY_OBJECT_ID = {
     "288796": "Infios",
     "288761": "PSB",
     "309628": "Ferag",
-    # "XXXXX": "Fives",
-    # "XXXXX": "Macrolet",
+    "309627": "Fives",
+    "288794": "Macrolet",
     # "XXXXX": "Vanderlande",
 }
 
