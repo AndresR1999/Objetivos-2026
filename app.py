@@ -731,7 +731,6 @@ columns_to_show = [
     "Estado",
     "Proveedor externo",
     "Responsable",
-    "Creador",
     "Prioridad",
     "Creado",
     "URL"
@@ -833,11 +832,6 @@ def render_tickets_table(df_table):
                 white-space: normal;
             }
 
-            .col-creador {
-                width: 160px;
-                white-space: normal;
-            }
-
             .col-prioridad {
                 width: 100px;
                 white-space: nowrap;
@@ -874,7 +868,6 @@ def render_tickets_table(df_table):
                         <th class="col-estado">Estado</th>
                         <th class="col-proveedor">Proveedor externo</th>
                         <th class="col-responsable">Responsable</th>
-                        <th class="col-creador">Creador</th>
                         <th class="col-prioridad">Prioridad</th>
                         <th class="col-creado">Creado</th>
                         <th class="col-url">Jira</th>
@@ -889,7 +882,6 @@ def render_tickets_table(df_table):
         estado = safe_text(row.get("Estado", ""))
         proveedor = safe_text(row.get("Proveedor externo", ""))
         responsable = safe_text(row.get("Responsable", ""))
-        creador = safe_text(row.get("Creador", ""))
         prioridad = safe_text(row.get("Prioridad", ""))
         creado = safe_text(row.get("Creado", ""))
         url = escape(str(row.get("URL", "")), quote=True)
@@ -906,7 +898,6 @@ def render_tickets_table(df_table):
                 <td class="col-estado">{estado}</td>
                 <td class="col-proveedor">{proveedor}</td>
                 <td class="col-responsable">{responsable}</td>
-                <td class="col-creador">{creador}</td>
                 <td class="col-prioridad">{prioridad}</td>
                 <td class="col-creado">{creado}</td>
                 <td class="col-url">{jira_link}</td>
