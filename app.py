@@ -1345,31 +1345,56 @@ def render_static_daily_trend_chart(series):
 
     st.pyplot(fig, clear_figure=True)
 
-def render_static_html_table(df_table, url_column="URL"):
+def render_static_html_table(df_table, url_column="URL", max_height=None):
     if df_table is None or df_table.empty:
         return ""
 
     visible_columns = list(df_table.columns)
+
+    center_columns = set()
+
+    for column in visible_columns:
+        if pd.api.types.is_numeric_dtype(df_table[column]):
+            center_columns.add(column)
+
+        if "%" in str(column):
+            center_columns.add(column)
+
+    wrapper_classes = "static-table-wrapper"
+
+    wrapper_style = ""
+
+    if max_height:
+        wrapper_classes += " scrollable-static-table"
+        wrapper_style = (
+            f'style="max-height: {int(max_height)}px; '
+            f'overflow-y: auto; '
+            f'overflow-x: hidden;"'
+        )
 
     html = """
     <style>
         .static-table-wrapper {
             width: 100%;
             overflow: visible;
-            pointer-events: none;
             user-select: none;
             margin-top: 0.5rem;
             margin-bottom: 1.5rem;
+            border: 1px solid #e5e7eb;
+            border-radius: 14px;
+            background: #ffffff;
+            box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
+        }
+
+        .scrollable-static-table {
+            overflow-y: auto;
+            overflow-x: hidden;
         }
 
         .static-table {
             width: 100%;
             border-collapse: collapse;
             background: #ffffff;
-            border: 1px solid #e5e7eb;
-            border-radius: 14px;
-            overflow: hidden;
-            box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
             font-size: 13px;
         }
 
@@ -1384,6 +1409,13 @@ def render_static_html_table(df_table, url_column="URL"):
             color: #334155;
             font-weight: 700;
             white-space: nowrap;
+            background: #f8fafc;
+        }
+
+        .scrollable-static-table .static-table th {
+            position: sticky;
+            top: 0;
+            z-index: 2;
         }
 
         .static-table td {
@@ -1401,29 +1433,30 @@ def render_static_html_table(df_table, url_column="URL"):
             background: #fafafa;
         }
 
-        .static-table .numeric-cell {
-            text-align: right;
+        .static-table .center-cell {
+            text-align: center;
             font-variant-numeric: tabular-nums;
         }
 
+        .static-table .url-cell {
+            text-align: center;
+            white-space: nowrap;
+        }
+
         .static-table .open-ticket-button {
-            display: inline-block;
-            padding: 6px 12px;
-            border-radius: 999px;
-            background: #2563eb;
-            color: #ffffff !important;
+            color: #2563eb !important;
             text-decoration: none;
             font-weight: 700;
-            font-size: 12px;
-            pointer-events: auto;
+            background: transparent;
+            padding: 0;
+            border-radius: 0;
+            font-size: 13px;
             cursor: pointer;
-            user-select: none;
         }
 
         .static-table .open-ticket-button:hover {
-            background: #1d4ed8;
-            color: #ffffff !important;
-            text-decoration: none;
+            color: #2563eb !important;
+            text-decoration: underline;
         }
 
         .static-table .empty-url {
@@ -1432,12 +1465,19 @@ def render_static_html_table(df_table, url_column="URL"):
     </style>
     """
 
-    html += '<div class="static-table-wrapper">'
+    html += f'<div class="{wrapper_classes}" {wrapper_style}>'
     html += '<table class="static-table">'
 
     html += "<thead><tr>"
+
     for column in visible_columns:
-        html += f"<th>{escape(str(column))}</th>"
+        th_class = ""
+
+        if column in center_columns or column == url_column:
+            th_class = ' class="center-cell"'
+
+        html += f"<th{th_class}>{escape(str(column))}</th>"
+
     html += "</tr></thead>"
 
     html += "<tbody>"
@@ -1464,13 +1504,13 @@ def render_static_html_table(df_table, url_column="URL"):
                 else:
                     cell_html = '<span class="empty-url">-</span>'
 
-                html += f"<td>{cell_html}</td>"
+                html += f'<td class="url-cell">{cell_html}</td>'
 
             else:
                 cell_class = ""
 
-                if pd.api.types.is_number(value):
-                    cell_class = ' class="numeric-cell"'
+                if column in center_columns:
+                    cell_class = ' class="center-cell"'
 
                 html += f"<td{cell_class}>{escape(str(value))}</td>"
 
@@ -1481,6 +1521,7 @@ def render_static_html_table(df_table, url_column="URL"):
     html += "</div>"
 
     return html
+
 
 with tab_analytics:
     st.markdown("**Resumen por proveedor externo**")
