@@ -8,6 +8,8 @@ from html import unescape, escape
 import streamlit.components.v1 as components
 import unicodedata
 import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+
 
 st.set_page_config(
     page_title="Visor de Tickets Jira",
@@ -1169,39 +1171,144 @@ with tab_tickets:
             scrolling=False
         )
 
-def render_static_bar_chart(series, xlabel="", ylabel="Tickets", color="#2563eb"):
+def apply_chart_style(ax):
+    ax.set_facecolor("#ffffff")
+    ax.figure.set_facecolor("#ffffff")
+
+    ax.grid(
+        axis="x",
+        linestyle="--",
+        alpha=0.18,
+        color="#64748b"
+    )
+
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.spines["left"].set_color("#e5e7eb")
+    ax.spines["bottom"].set_color("#e5e7eb")
+
+    ax.tick_params(
+        axis="both",
+        labelsize=9,
+        colors="#475569"
+    )
+
+    ax.xaxis.label.set_color("#334155")
+    ax.yaxis.label.set_color("#334155")
+
+
+def render_static_horizontal_bar_chart(
+    series,
+    xlabel="Tickets",
+    color="#2563eb",
+    max_items=12
+):
     if series is None or series.empty:
         st.info("No hay datos para generar el gráfico.")
         return
 
     chart_data = series.copy()
+    chart_data = chart_data.sort_values(ascending=True).tail(max_items)
 
-    chart_data.index = chart_data.index.map(
-        lambda value: value.strftime("%d/%m/%Y") if hasattr(value, "strftime") else str(value)
-    )
+    chart_data.index = chart_data.index.map(str)
 
-    fig_width = max(6, min(14, len(chart_data) * 0.8))
-    fig, ax = plt.subplots(figsize=(fig_width, 4))
+    fig_height = max(3.5, len(chart_data) * 0.45)
+    fig, ax = plt.subplots(figsize=(7.5, fig_height))
 
-    ax.bar(
+    bars = ax.barh(
         chart_data.index,
         chart_data.values,
-        color=color
+        color=color,
+        alpha=0.88
     )
 
     ax.set_xlabel(xlabel)
-    ax.set_ylabel(ylabel)
+    ax.set_ylabel("")
+
+    apply_chart_style(ax)
+
+    max_value = chart_data.max()
+
+    for bar in bars:
+        width = bar.get_width()
+        ax.text(
+            width + max_value * 0.015,
+            bar.get_y() + bar.get_height() / 2,
+            f"{int(width)}",
+            va="center",
+            ha="left",
+            fontsize=9,
+            color="#334155",
+            fontweight="bold"
+        )
+
+    ax.set_xlim(0, max_value * 1.15 if max_value > 0 else 1)
+
+    fig.tight_layout()
+
+    st.pyplot(fig, clear_figure=True)
+
+
+def render_static_daily_trend_chart(series):
+    if series is None or series.empty:
+        st.info("No hay datos para generar la tendencia diaria.")
+        return
+
+    chart_data = series.copy()
+    chart_data.index = pd.to_datetime(chart_data.index)
+
+    fig, ax = plt.subplots(figsize=(10, 4.2))
+
+    ax.plot(
+        chart_data.index,
+        chart_data.values,
+        color="#7c3aed",
+        linewidth=2.5,
+        marker="o",
+        markersize=4
+    )
+
+    ax.fill_between(
+        chart_data.index,
+        chart_data.values,
+        color="#7c3aed",
+        alpha=0.12
+    )
+
+    ax.set_xlabel("Día")
+    ax.set_ylabel("Tickets")
 
     ax.grid(
         axis="y",
         linestyle="--",
-        alpha=0.25
+        alpha=0.22,
+        color="#64748b"
     )
 
-    ax.tick_params(axis="x", rotation=45)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.spines["left"].set_color("#e5e7eb")
+    ax.spines["bottom"].set_color("#e5e7eb")
 
-    for label in ax.get_xticklabels():
-        label.set_horizontalalignment("right")
+    ax.tick_params(
+        axis="both",
+        labelsize=9,
+        colors="#475569"
+    )
+
+    ax.xaxis.set_major_locator(mdates.AutoDateLocator(minticks=4, maxticks=8))
+    ax.xaxis.set_major_formatter(mdates.DateFormatter("%d/%m"))
+
+    plt.setp(
+        ax.get_xticklabels(),
+        rotation=35,
+        ha="right"
+    )
+
+    max_value = chart_data.max()
+
+    if max_value > 0:
+        ax.set_ylim(0, max_value * 1.18)
 
     fig.tight_layout()
 
@@ -1446,73 +1553,69 @@ with tab_analytics:
                     .sort_values(ascending=False)
                 )
 
-                render_static_bar_chart(
+                render_static_horizontal_bar_chart(
                     tickets_by_provider,
-                    xlabel="Proveedor externo",
-                    ylabel="Tickets",
+                    xlabel="Tickets",
                     color="#2563eb"
                 )
+                
 
 
         with trend_col2:
             st.markdown("**Tickets por estado**")
-
+        
             tickets_by_status = (
                 df_provider
                 .groupby("Estado")["Clave"]
                 .count()
                 .sort_values(ascending=False)
             )
-
-            render_static_bar_chart(
+        
+            render_static_horizontal_bar_chart(
                 tickets_by_status,
-                xlabel="Estado",
-                ylabel="Tickets",
-                color="#16a34a"
+                xlabel="Tickets",
+                color="#10b981"
             )
+        
 
         trend_col3, trend_col4 = st.columns(2)
 
         with trend_col3:
             st.markdown("**Tickets por prioridad**")
-
+        
             tickets_by_priority = (
                 df_provider
                 .groupby("Prioridad")["Clave"]
                 .count()
                 .sort_values(ascending=False)
             )
-
-            render_static_bar_chart(
+        
+            render_static_horizontal_bar_chart(
                 tickets_by_priority,
-                xlabel="Prioridad",
-                ylabel="Tickets",
+                xlabel="Tickets",
                 color="#f97316"
             )
 
+
         with trend_col4:
             st.markdown("**Tickets creados por día**")
-
+        
             df_trend = df_provider.dropna(subset=["_Creado_dt"]).copy()
-
+        
             if df_trend.empty:
                 st.info("No hay fechas válidas para generar la tendencia diaria.")
             else:
                 df_trend["Día"] = df_trend["_Creado_dt"].dt.date
-
+        
                 tickets_by_day = (
                     df_trend
                     .groupby("Día")["Clave"]
                     .count()
                     .sort_index()
                 )
+        
+                render_static_daily_trend_chart(tickets_by_day)
 
-                render_static_bar_chart(
-                    tickets_by_day,
-                    xlabel="Día",
-                    ylabel="Tickets",
-                    color="#7c3aed"
-                )
 
 with st.expander("Configuración de la consulta"):
     st.write("**Usuario conectado:**", current_user.get("display_name"))
