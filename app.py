@@ -6,7 +6,7 @@ from datetime import datetime
 import re
 from html import unescape, escape
 import streamlit.components.v1 as components
-
+import unicodedata
 
 st.set_page_config(
     page_title="Visor de Tickets Jira",
@@ -16,7 +16,6 @@ st.set_page_config(
 
 st.title("🎫 Visor de Tickets Jira")
 st.caption("Visualización y filtrado de tickets conectados con Jira.")
-
 
 JIRA_BASE_URL = st.secrets["JIRA_BASE_URL"].rstrip("/")
 JIRA_EMAIL = st.secrets["JIRA_EMAIL"]
@@ -763,7 +762,73 @@ def render_tickets_table(df_table):
             return ""
         return escape(str(value))
 
+    def normalize_css_class(value):
+        value = str(value or "").strip().lower()
+
+        value = unicodedata.normalize("NFKD", value)
+        value = "".join(c for c in value if not unicodedata.combining(c))
+
+        value = re.sub(r"[^a-z0-9]+", "-", value)
+        value = value.strip("-")
+
+        return value or "default"
+
+    def render_status_badge(value):
+        label = safe_text(value)
+
+        if not label or label == "-":
+            return '<span class="badge badge-status-default">-</span>'
+
+        status_class = normalize_css_class(label)
+
+        known_statuses = {
+            "resuelta",
+            "resuelto",
+            "done",
+            "closed",
+            "escalated",
+            "escalado",
+            "cancelado",
+            "cancelada",
+            "canceled",
+            "cancelled",
+            "en-curso",
+            "in-progress",
+            "pendiente",
+            "pending",
+            "open",
+            "to-do",
+            "reopened"
+        }
+
+        if status_class not in known_statuses:
+            status_class = "default"
+
+        return f'<span class="badge badge-status-{status_class}">{label}</span>'
+
+    def render_priority_badge(value):
+        label = safe_text(value)
+
+        if not label or label == "-":
+            return '<span class="badge badge-priority-default">-</span>'
+
+        priority_class = normalize_css_class(label)
+
+        known_priorities = {
+            "highest",
+            "high",
+            "medium",
+            "low",
+            "lowest"
+        }
+
+        if priority_class not in known_priorities:
+            priority_class = "default"
+
+        return f'<span class="badge badge-priority-{priority_class}">{label}</span>'
+
     html_parts = []
+
 
     html_parts.append("""
     <!DOCTYPE html>
@@ -774,7 +839,7 @@ def render_tickets_table(df_table):
                 margin: 0;
                 padding: 0;
                 font-family: Arial, sans-serif;
-                background: white;
+                background: #f6f7fb;
             }
 
             .tickets-table-container {
@@ -782,45 +847,151 @@ def render_tickets_table(df_table):
                 height: 720px;
                 overflow-y: auto;
                 overflow-x: auto;
-                border: 1px solid #e6e6e6;
-                border-radius: 8px;
-                background: white;
+                border: 1px solid #e5e7eb;
+                border-radius: 14px;
+                background: #ffffff;
+                box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
             }
 
             table.tickets-table {
                 width: 100%;
                 min-width: 1450px;
-                border-collapse: collapse;
+                border-collapse: separate;
+                border-spacing: 0;
                 table-layout: fixed;
                 font-size: 14px;
+                background: #ffffff;
             }
 
             .tickets-table th {
                 position: sticky;
                 top: 0;
-                background-color: #f7f7f7;
+                background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
                 z-index: 2;
                 text-align: left;
-                padding: 10px;
-                border-bottom: 1px solid #ddd;
-                font-weight: 600;
-                color: #222;
+                padding: 12px 10px;
+                border-bottom: 1px solid #dce1e8;
+                font-weight: 700;
+                color: #334155;
+                white-space: nowrap;
             }
 
             .tickets-table td {
-                padding: 10px;
-                border-bottom: 1px solid #eee;
+                padding: 11px 10px;
+                border-bottom: 1px solid #eef2f7;
                 vertical-align: top;
-                color: #222;
+                color: #1f2937;
+            }
+
+            .tickets-table tr:nth-child(odd) {
+                background-color: #ffffff;
+            }
+
+            .tickets-table tr:nth-child(even) {
+                background-color: #f9fafb;
             }
 
             .tickets-table tr:hover {
-                background-color: #fafafa;
+                background-color: #eef6ff;
+            }
+
+            .badge {
+                display: inline-block;
+                padding: 5px 10px;
+                border-radius: 999px;
+                font-size: 12px;
+                font-weight: 700;
+                line-height: 1;
+                white-space: nowrap;
+                border: 1px solid transparent;
+            }
+
+            /* Estados */
+            .badge-status-resuelta,
+            .badge-status-resuelto,
+            .badge-status-done,
+            .badge-status-closed {
+                background: #dcfce7;
+                color: #166534;
+                border-color: #bbf7d0;
+            }
+
+            .badge-status-escalated,
+            .badge-status-escalado {
+                background: #dbeafe;
+                color: #1d4ed8;
+                border-color: #bfdbfe;
+            }
+
+            .badge-status-cancelado,
+            .badge-status-cancelada,
+            .badge-status-canceled,
+            .badge-status-cancelled {
+                background: #fee2e2;
+                color: #b91c1c;
+                border-color: #fecaca;
+            }
+
+            .badge-status-en-curso,
+            .badge-status-in-progress {
+                background: #fef3c7;
+                color: #92400e;
+                border-color: #fde68a;
+            }
+
+            .badge-status-pendiente,
+            .badge-status-pending,
+            .badge-status-open,
+            .badge-status-to-do,
+            .badge-status-reopened {
+                background: #ede9fe;
+                color: #6d28d9;
+                border-color: #ddd6fe;
+            }
+
+            .badge-status-default {
+                background: #e5e7eb;
+                color: #374151;
+                border-color: #d1d5db;
+            }
+
+            /* Prioridades */
+            .badge-priority-highest {
+                background: #fee2e2;
+                color: #b91c1c;
+                border-color: #fecaca;
+            }
+
+            .badge-priority-high {
+                background: #ffedd5;
+                color: #c2410c;
+                border-color: #fed7aa;
+            }
+
+            .badge-priority-medium {
+                background: #dbeafe;
+                color: #1d4ed8;
+                border-color: #bfdbfe;
+            }
+
+            .badge-priority-low,
+            .badge-priority-lowest {
+                background: #e5e7eb;
+                color: #4b5563;
+                border-color: #d1d5db;
+            }
+
+            .badge-priority-default {
+                background: #f3f4f6;
+                color: #374151;
+                border-color: #e5e7eb;
             }
 
             .col-clave {
                 width: 95px;
                 white-space: nowrap;
+                font-weight: 700;
+                color: #0f172a;
             }
 
             .col-resumen {
@@ -832,39 +1003,41 @@ def render_tickets_table(df_table):
             }
 
             .col-estado {
-                width: 130px;
-                white-space: normal;
+                width: 140px;
+                white-space: nowrap;
             }
 
             .col-proveedor {
-                width: 140px;
+                width: 150px;
                 white-space: normal;
             }
 
             .col-responsable {
-                width: 160px;
+                width: 170px;
                 white-space: normal;
             }
 
             .col-prioridad {
-                width: 100px;
+                width: 115px;
                 white-space: nowrap;
             }
 
             .col-creado {
                 width: 135px;
                 white-space: nowrap;
+                color: #475569;
             }
 
             .col-url {
                 width: 80px;
                 white-space: nowrap;
+                text-align: center;
             }
 
             .tickets-table a {
-                color: #0068c9;
+                color: #2563eb;
                 text-decoration: none;
-                font-weight: 500;
+                font-weight: 700;
             }
 
             .tickets-table a:hover {
@@ -890,15 +1063,17 @@ def render_tickets_table(df_table):
                 <tbody>
     """)
 
+
     for _, row in df_table.iterrows():
         clave = safe_text(row.get("Clave", ""))
         resumen = safe_text(row.get("Resumen", ""))
-        estado = safe_text(row.get("Estado", ""))
+        estado = render_status_badge(row.get("Estado", ""))
         proveedor = safe_text(row.get("Proveedor externo", ""))
         responsable = safe_text(row.get("Responsable", ""))
-        prioridad = safe_text(row.get("Prioridad", ""))
+        prioridad = render_priority_badge(row.get("Prioridad", ""))
         creado = safe_text(row.get("Creado", ""))
         url = escape(str(row.get("URL", "")), quote=True)
+
 
         if url:
             jira_link = f'<a href="{url}" target="_blank" rel="noopener noreferrer">Abrir</a>'
