@@ -4,7 +4,7 @@ import requests
 from requests.auth import HTTPBasicAuth
 from datetime import datetime
 import re
-from html import unescape
+from html import unescape, escape
 
 st.set_page_config(
     page_title="Visor de Tickets Jira",
@@ -29,7 +29,7 @@ JIRA_PROVEEDOR_FIELD_NAME = st.secrets.get(
 
 PROVEEDOR_BY_OBJECT_ID = {
     "288795": "Clustag",
-    "346316": "Ninguno",
+    "346316": "-",
     "288760": "TGW",
     "295882": "DXC",
     "288796": "Infios",
@@ -740,18 +740,155 @@ existing_columns = [
     if col in df_filtered.columns
 ]
 
-st.dataframe(
-    df_filtered[existing_columns],
-    use_container_width=True,
-    hide_index=True,
-    column_config={
-        "URL": st.column_config.LinkColumn(
-            "Abrir en Jira",
-            display_text="Abrir"
-        )
-    }
-)
+df_table = df_filtered[existing_columns].copy()
 
+def render_tickets_table(df_table):
+    html = """
+    <style>
+        .tickets-table-container {
+            width: 100%;
+            max-height: 750px;
+            overflow-y: auto;
+            overflow-x: auto;
+            border: 1px solid #e6e6e6;
+            border-radius: 8px;
+        }
+
+        table.tickets-table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+            font-size: 14px;
+        }
+
+        .tickets-table th {
+            position: sticky;
+            top: 0;
+            background-color: #f7f7f7;
+            z-index: 1;
+            text-align: left;
+            padding: 10px;
+            border-bottom: 1px solid #ddd;
+            font-weight: 600;
+        }
+
+        .tickets-table td {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            vertical-align: top;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+        }
+
+        .tickets-table tr:hover {
+            background-color: #fafafa;
+        }
+
+        .col-clave {
+            width: 90px;
+        }
+
+        .col-resumen {
+            width: 38%;
+            white-space: normal;
+            line-height: 1.35;
+        }
+
+        .col-estado {
+            width: 120px;
+        }
+
+        .col-proveedor {
+            width: 130px;
+        }
+
+        .col-responsable {
+            width: 140px;
+        }
+
+        .col-creador {
+            width: 140px;
+        }
+
+        .col-prioridad {
+            width: 90px;
+        }
+
+        .col-creado {
+            width: 120px;
+        }
+
+        .col-url {
+            width: 90px;
+        }
+
+        .tickets-table a {
+            color: #0068c9;
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .tickets-table a:hover {
+            text-decoration: underline;
+        }
+    </style>
+
+    <div class="tickets-table-container">
+        <table class="tickets-table">
+            <thead>
+                <tr>
+                    <th class="col-clave">Clave</th>
+                    <th class="col-resumen">Resumen</th>
+                    <th class="col-estado">Estado</th>
+                    <th class="col-proveedor">Proveedor externo</th>
+                    <th class="col-responsable">Responsable</th>
+                    <th class="col-creador">Creador</th>
+                    <th class="col-prioridad">Prioridad</th>
+                    <th class="col-creado">Creado</th>
+                    <th class="col-url">Jira</th>
+                </tr>
+            </thead>
+            <tbody>
+    """
+
+    for _, row in df_table.iterrows():
+        clave = escape(str(row.get("Clave", "")))
+        resumen = escape(str(row.get("Resumen", "")))
+        estado = escape(str(row.get("Estado", "")))
+        proveedor = escape(str(row.get("Proveedor externo", "")))
+        responsable = escape(str(row.get("Responsable", "")))
+        creador = escape(str(row.get("Creador", "")))
+        prioridad = escape(str(row.get("Prioridad", "")))
+        creado = escape(str(row.get("Creado", "")))
+        url = escape(str(row.get("URL", "")), quote=True)
+
+        html += f"""
+            <tr>
+                <td class="col-clave">{clave}</td>
+                <td class="col-resumen">{resumen}</td>
+                <td class="col-estado">{estado}</td>
+                <td class="col-proveedor">{proveedor}</td>
+                <td class="col-responsable">{responsable}</td>
+                <td class="col-creador">{creador}</td>
+                <td class="col-prioridad">{prioridad}</td>
+                <td class="col-creado">{creado}</td>
+                <td class="col-url"><a href="{url}" target="_blank">Abrir</a></td>
+            </tr>
+        """
+
+    html += """
+            </tbody>
+        </table>
+    </div>
+    """
+
+    return html
+
+
+st.markdown(
+    render_tickets_table(df_table),
+    unsafe_allow_html=True
+)
 
 with st.expander("Configuración de la consulta"):
     st.write("**Usuario conectado:**", current_user.get("display_name"))
