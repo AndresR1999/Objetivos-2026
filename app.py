@@ -9,8 +9,7 @@ import streamlit.components.v1 as components
 import unicodedata
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
-import oracledb
-from pathlib import Path
+
 
 st.set_page_config(
     page_title="Visor de Tickets Jira",
@@ -20,13 +19,6 @@ st.set_page_config(
 
 st.title("🎫 Visor de Tickets Jira")
 st.caption("Visualización y filtrado de tickets conectados con Jira.")
-
-QUERY_DIR = Path(__file__).parent / "queries"
-ALARM_QUERY_CATALOG_PATH = QUERY_DIR / "alarm_queries.csv"
-
-ORACLE_USER = st.secrets.get("ORACLE_USER", "")
-ORACLE_PASSWORD = st.secrets.get("ORACLE_PASSWORD", "")
-ORACLE_DSN = st.secrets.get("ORACLE_DSN", "")
 
 JIRA_BASE_URL = st.secrets["JIRA_BASE_URL"].rstrip("/")
 JIRA_EMAIL = st.secrets["JIRA_EMAIL"]
@@ -117,153 +109,6 @@ def jira_get_optional(endpoint, params=None):
         return response.json()
     except Exception:
         return None
-
-def oracle_is_configured():
-    return bool(ORACLE_USER and ORACLE_PASSWORD and ORACLE_DSN)
-
-
-def get_oracle_connection():
-    return oracledb.connect(
-        user=ORACLE_USER,
-        password=ORACLE_PASSWORD,
-        dsn=ORACLE_DSN
-    )
-
-
-@st.cache_data(ttl=300)
-def load_alarm_query_catalog():
-    if not ALARM_QUERY_CATALOG_PATH.exists():
-        raise FileNotFoundError(
-            f"No se ha encontrado el catálogo de consultas: {ALARM_QUERY_CATALOG_PATH}"
-        )
-
-    catalog = pd.read_csv(ALARM_QUERY_CATALOG_PATH)
-
-    required_columns = [
-        "id",
-        "label",
-        "file",
-        "default_warning_minutes",
-        "default_critical_minutes",
-        "default_warning_orders",
-        "default_critical_orders"
-    ]
-
-    missing_columns = [
-        col for col in required_columns
-        if col not in catalog.columns
-    ]
-
-    if missing_columns:
-        raise ValueError(
-            "Faltan columnas en alarm_queries.csv: "
-            + ", ".join(missing_columns)
-        )
-
-    return catalog
-
-
-@st.cache_data(ttl=60)
-def run_alarm_sql_from_file(sql_file_name):
-    query_path = QUERY_DIR / str(sql_file_name)
-
-    if not query_path.exists():
-        raise FileNotFoundError(
-            f"No se ha encontrado el archivo SQL: {query_path}"
-        )
-
-    query = query_path.read_text(encoding="utf-8")
-
-    with get_oracle_connection() as connection:
-        df_sql = pd.read_sql(query, con=connection)
-
-    return df_sql
-
-
-def prepare_alarm_df(
-    df_alarm,
-    warning_minutes,
-    critical_minutes,
-    warning_orders,
-    critical_orders
-):
-    df_alarm = df_alarm.copy()
-
-    df_alarm.columns = [
-        str(col).strip().upper()
-        for col in df_alarm.columns
-    ]
-
-    numeric_columns = [
-        "MINUTOS_SIN_COMPLETAR",
-        "ACTIVE_CREATED",
-        "ACTIVE_SENT",
-        "ACTIVE_EXECUTING"
-    ]
-
-    for col in numeric_columns:
-        if col not in df_alarm.columns:
-            df_alarm[col] = 0
-
-        df_alarm[col] = pd.to_numeric(
-            df_alarm[col],
-            errors="coerce"
-        ).fillna(0)
-
-    df_alarm["ORDENES_ACTIVAS"] = (
-        df_alarm["ACTIVE_CREATED"]
-        + df_alarm["ACTIVE_SENT"]
-        + df_alarm["ACTIVE_EXECUTING"]
-    )
-
-    def classify_alarm(row):
-        minutos = row["MINUTOS_SIN_COMPLETAR"]
-        ordenes = row["ORDENES_ACTIVAS"]
-
-        if minutos >= critical_minutes or ordenes >= critical_orders:
-            return "Crítica"
-
-        if minutos >= warning_minutes or ordenes >= warning_orders:
-            return "Aviso"
-
-        return "OK"
-
-    df_alarm["ALARMA"] = df_alarm.apply(classify_alarm, axis=1)
-
-    alarm_order = {
-        "Crítica": 0,
-        "Aviso": 1,
-        "OK": 2
-    }
-
-    df_alarm["_alarm_order"] = df_alarm["ALARMA"].map(alarm_order).fillna(9)
-
-    df_alarm = (
-        df_alarm
-        .sort_values(
-            by=["_alarm_order", "MINUTOS_SIN_COMPLETAR", "ORDENES_ACTIVAS"],
-            ascending=[True, False, False]
-        )
-        .drop(columns=["_alarm_order"])
-    )
-
-    return df_alarm
-
-
-def style_alarm_rows(row):
-    alarma = row.get("ALARMA", "")
-
-    if alarma == "Crítica":
-        return [
-            "background-color: #fee2e2; color: #991b1b; font-weight: 700"
-        ] * len(row)
-
-    if alarma == "Aviso":
-        return [
-            "background-color: #fef3c7; color: #92400e; font-weight: 700"
-        ] * len(row)
-
-    return [""] * len(row)
 
 
 @st.cache_data(ttl=300)
@@ -967,10 +812,9 @@ if not proveedor_field_id:
         "Revisa que el nombre del campo coincida exactamente con Jira."
     )
 
-tab_tickets, tab_analytics, tab_alarmas = st.tabs([
+tab_tickets, tab_analytics = st.tabs([
     "📋 Tickets",
-    "📊 Proveedores y tendencias",
-    "🚨 Alarmas operación"
+    "📊 Proveedores y tendencias"
 ])
 
 columns_to_show = [
@@ -2012,173 +1856,6 @@ with tab_analytics:
         
                 render_static_daily_trend_chart(tickets_by_day)
 
-with tab_alarmas:
-    st.markdown("**Alarmas de operación**")
-    st.caption(
-        "Monitorización de Stingrays y MIN parados ahora. "
-        "Las consultas SQL se leen desde archivos externos en la carpeta queries."
-    )
-
-    if not oracle_is_configured():
-        st.error(
-            "Falta configurar la conexión Oracle en los secrets: "
-            "ORACLE_USER, ORACLE_PASSWORD y ORACLE_DSN."
-        )
-
-    else:
-        try:
-            alarm_catalog = load_alarm_query_catalog()
-
-            alarm_label = st.selectbox(
-                "Selecciona qué quieres revisar",
-                alarm_catalog["label"].tolist()
-            )
-
-            selected_alarm = alarm_catalog[
-                alarm_catalog["label"] == alarm_label
-            ].iloc[0]
-
-            st.markdown("**Umbrales de aviso**")
-
-            threshold_col1, threshold_col2, threshold_col3, threshold_col4 = st.columns(4)
-
-            warning_minutes = threshold_col1.number_input(
-                "Aviso minutos",
-                min_value=1,
-                value=int(selected_alarm["default_warning_minutes"]),
-                step=1,
-                key=f"warning_minutes_{selected_alarm['id']}"
-            )
-
-            critical_minutes = threshold_col2.number_input(
-                "Crítico minutos",
-                min_value=1,
-                value=int(selected_alarm["default_critical_minutes"]),
-                step=1,
-                key=f"critical_minutes_{selected_alarm['id']}"
-            )
-
-            warning_orders = threshold_col3.number_input(
-                "Aviso órdenes activas",
-                min_value=1,
-                value=int(selected_alarm["default_warning_orders"]),
-                step=1,
-                key=f"warning_orders_{selected_alarm['id']}"
-            )
-
-            critical_orders = threshold_col4.number_input(
-                "Crítico órdenes activas",
-                min_value=1,
-                value=int(selected_alarm["default_critical_orders"]),
-                step=1,
-                key=f"critical_orders_{selected_alarm['id']}"
-            )
-
-            if warning_minutes >= critical_minutes:
-                st.warning("El umbral de aviso en minutos debería ser menor que el crítico.")
-
-            if warning_orders >= critical_orders:
-                st.warning("El umbral de aviso de órdenes activas debería ser menor que el crítico.")
-
-            refresh_col1, refresh_col2 = st.columns([1, 4])
-
-            with refresh_col1:
-                if st.button("🔄 Actualizar alarmas", use_container_width=True):
-                    st.cache_data.clear()
-                    st.rerun()
-
-            with refresh_col2:
-                st.caption(
-                    "Los resultados se cachean durante 60 segundos. "
-                    "Pulsa actualizar si necesitas forzar la consulta."
-                )
-
-            with st.spinner("Consultando estado operativo..."):
-                raw_alarm_df = run_alarm_sql_from_file(
-                    selected_alarm["file"]
-                )
-
-            alarm_df = prepare_alarm_df(
-                raw_alarm_df,
-                warning_minutes,
-                critical_minutes,
-                warning_orders,
-                critical_orders
-            )
-
-            total_elementos = len(alarm_df)
-            total_criticas = int((alarm_df["ALARMA"] == "Crítica").sum())
-            total_avisos = int((alarm_df["ALARMA"] == "Aviso").sum())
-            total_ok = int((alarm_df["ALARMA"] == "OK").sum())
-
-            max_minutos = (
-                alarm_df["MINUTOS_SIN_COMPLETAR"].max()
-                if not alarm_df.empty
-                else 0
-            )
-
-            max_ordenes = (
-                alarm_df["ORDENES_ACTIVAS"].max()
-                if not alarm_df.empty
-                else 0
-            )
-
-            kpi1, kpi2, kpi3, kpi4, kpi5 = st.columns(5)
-
-            kpi1.metric("Elementos parados", total_elementos)
-            kpi2.metric("Críticas", total_criticas)
-            kpi3.metric("Avisos", total_avisos)
-            kpi4.metric("Máx. minutos", f"{max_minutos:.2f}")
-            kpi5.metric("Máx. órdenes", int(max_ordenes))
-
-            if total_criticas > 0:
-                st.error(
-                    f"Hay {total_criticas} alarma(s) crítica(s). "
-                    "Revisa los primeros registros de la tabla."
-                )
-            elif total_avisos > 0:
-                st.warning(
-                    f"Hay {total_avisos} aviso(s). "
-                    "Conviene revisar la evolución."
-                )
-            elif total_elementos > 0:
-                st.success(
-                    "Hay elementos parados, pero ninguno supera los umbrales configurados."
-                )
-            else:
-                st.success("No hay pasillos o niveles parados según la consulta actual.")
-
-            alarm_columns = [
-                "ALARMA",
-                "AISLE",
-                "LEVEL_ID",
-                "ULTIMO_FINISHED",
-                "MINUTOS_SIN_COMPLETAR",
-                "ACTIVE_CREATED",
-                "ACTIVE_SENT",
-                "ACTIVE_EXECUTING",
-                "ORDENES_ACTIVAS"
-            ]
-
-            existing_alarm_columns = [
-                col for col in alarm_columns
-                if col in alarm_df.columns
-            ]
-
-            if alarm_df.empty:
-                st.info("La consulta no ha devuelto registros.")
-            else:
-                alarm_view = alarm_df[existing_alarm_columns].copy()
-
-                st.dataframe(
-                    alarm_view.style.apply(style_alarm_rows, axis=1),
-                    hide_index=True,
-                    use_container_width=True
-                )
-
-        except Exception as e:
-            st.error("No se ha podido consultar el estado operativo.")
-            st.code(str(e))
 
 with st.expander("Configuración de la consulta"):
     st.write("**Usuario conectado:**", current_user.get("display_name"))
@@ -2195,4 +1872,3 @@ with st.expander("Configuración de la consulta"):
         )
     else:
         st.warning("Campo de proveedor no encontrado.")
-
