@@ -1429,6 +1429,8 @@ def render_static_daily_trend_chart(series):
 
     chart_data = series.copy()
     chart_data.index = pd.to_datetime(chart_data.index)
+    chart_data = chart_data.sort_index()
+
 
     fig, ax = plt.subplots(figsize=(7.5, 4.2))
 
@@ -1470,7 +1472,7 @@ def render_static_daily_trend_chart(series):
     )
 
     ax.xaxis.set_major_locator(mdates.AutoDateLocator(minticks=4, maxticks=8))
-    ax.xaxis.set_major_formatter(mdates.DateFormatter("%d/%m"))
+    ax.xaxis.set_major_formatter(mdates.DateFormatter("%d/%m/%y"))
 
     plt.setp(
         ax.get_xticklabels(),
