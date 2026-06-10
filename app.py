@@ -812,10 +812,12 @@ if not proveedor_field_id:
         "Revisa que el nombre del campo coincida exactamente con Jira."
     )
 
-tab_tickets, tab_analytics = st.tabs([
+tab_tickets, tab_analytics, tab_grafana = st.tabs([
     "📋 Tickets",
-    "📊 Proveedores y tendencias"
+    "📊 Proveedores y tendencias",
+    "📈 Grafana B2B Miniload"
 ])
+
 
 columns_to_show = [
     "Clave",
@@ -1201,6 +1203,41 @@ with tab_tickets:
             height=760,
             scrolling=False
         )
+
+with tab_grafana:
+    st.markdown("**Dashboard Grafana — B2B Miniload**")
+    st.caption(
+        "Este dashboard se carga desde Grafana interno. "
+        "Necesitas estar conectado a la red Mango o VPN y tener permisos en Grafana."
+    )
+
+    grafana_dashboard_url = (
+        "https://pappgrafana01.intranet.mango.es/d/aexjkawslh9mod/b2b-miniload"
+        "?orgId=1"
+        "&from=now-24h"
+        "&to=now"
+        "&timezone=browser"
+        "&var-Metrica=cajas_posibles"
+        "&var-Tipo_ubicacion=$__all"
+        "&var-Pasillo=$__all"
+        "&var-Zona=$__all"
+        "&var-Tipo_bloque=$__all"
+        "&refresh=15m"
+        "&kiosk"
+    )
+
+    st.link_button(
+        "Abrir dashboard en Grafana",
+        grafana_dashboard_url,
+        use_container_width=True
+    )
+
+    components.iframe(
+        grafana_dashboard_url,
+        height=950,
+        scrolling=True
+    )
+
 
 def apply_chart_style(ax):
     ax.set_facecolor("#ffffff")
