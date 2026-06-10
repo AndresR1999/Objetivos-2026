@@ -1,0 +1,3 @@
+id,label,file,default_warning_minutes,default_critical_minutes,default_warning_orders,default_critical_orders
+stingrays,Stingrays parados ahora,stingrays_parados_ahora.sql,20,30,10,15
+min,MIN parados ahora,min_parados_ahora.sql,20,30,10,15
