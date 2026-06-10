@@ -12,13 +12,13 @@ import matplotlib.dates as mdates
 
 
 st.set_page_config(
-    page_title="Visor de Tickets Jira",
-    page_icon="🎫",
+    page_title="Panel de Seguimiento Operativo - MANGO",
+    page_icon="📊",
     layout="wide"
 )
 
-st.title("🎫 Visor de Tickets Jira")
-st.caption("Visualización y filtrado de tickets conectados con Jira.")
+st.title("📊 Panel de Seguimiento Operativo - MANGO")
+st.caption("Seguimiento operativo, análisis de tickets y accesos rápidos conectados con Jira.")
 
 JIRA_BASE_URL = st.secrets["JIRA_BASE_URL"].rstrip("/")
 JIRA_EMAIL = st.secrets["JIRA_EMAIL"]
