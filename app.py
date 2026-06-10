@@ -1372,7 +1372,9 @@ def render_static_horizontal_bar_chart(
     series,
     xlabel="Tickets",
     color="#2563eb",
-    max_items=12
+    max_items=12,
+    fig_width=7.5,
+    fig_height=4.2
 ):
     if series is None or series.empty:
         st.info("No hay datos para generar el gráfico.")
@@ -1383,8 +1385,7 @@ def render_static_horizontal_bar_chart(
 
     chart_data.index = chart_data.index.map(str)
 
-    fig_height = max(3.5, len(chart_data) * 0.45)
-    fig, ax = plt.subplots(figsize=(7.5, fig_height))
+    fig, ax = plt.subplots(figsize=(fig_width, fig_height))
 
     bars = ax.barh(
         chart_data.index,
@@ -1428,7 +1429,7 @@ def render_static_daily_trend_chart(series):
     chart_data = series.copy()
     chart_data.index = pd.to_datetime(chart_data.index)
 
-    fig, ax = plt.subplots(figsize=(10, 4.2))
+    fig, ax = plt.subplots(figsize=(7.5, 4.2))
 
     ax.plot(
         chart_data.index,
@@ -2029,35 +2030,6 @@ if seccion == "📊 Proveedores y tendencias":
 
 
                 st.markdown("---")
-
-        trend_col5, trend_col6 = st.columns(2)
-
-        with trend_col5:
-            st.markdown("**Tickets creados por año**")
-
-            df_year = df_provider.dropna(subset=["_Creado_dt"]).copy()
-
-            if df_year.empty:
-                st.info("No hay fechas válidas para generar el gráfico por año.")
-            else:
-                df_year["Año"] = df_year["_Creado_dt"].dt.year.astype(str)
-
-                tickets_by_year = (
-                    df_year
-                    .groupby("Año")["Clave"]
-                    .count()
-                    .sort_index()
-                )
-
-                render_static_horizontal_bar_chart(
-                    tickets_by_year,
-                    xlabel="Tickets",
-                    color="#7c3aed"
-                )
-
-        with trend_col6:
-            st.empty()
-
 
 with st.expander("Configuración de la consulta"):
     st.write("**Usuario conectado:**", current_user.get("display_name"))
