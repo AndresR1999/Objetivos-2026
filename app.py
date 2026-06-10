@@ -1960,47 +1960,47 @@ if seccion == "📊 Proveedores y tendencias":
             )
         
 
-                trend_col3, trend_col4 = st.columns(2)
+        trend_col3, trend_col4 = st.columns(2)
 
-                with trend_col3:
-                    st.markdown("**Tickets por prioridad**")
-                
-                    tickets_by_priority = (
-                        df_provider
-                        .groupby("Prioridad")["Clave"]
-                        .count()
-                        .sort_values(ascending=False)
-                    )
-                
-                    render_static_horizontal_bar_chart(
-                        tickets_by_priority,
-                        xlabel="Tickets",
-                        color="#f97316"
-                    )
+        with trend_col3:
+            st.markdown("**Tickets por prioridad**")
         
-                with trend_col4:
-                    st.empty()
+            tickets_by_priority = (
+                df_provider
+                .groupby("Prioridad")["Clave"]
+                .count()
+                .sort_values(ascending=False)
+            )
         
-                st.markdown("---")
+            render_static_horizontal_bar_chart(
+                tickets_by_priority,
+                xlabel="Tickets",
+                color="#f97316"
+            )
+
+        with trend_col4:
+            st.empty()
+
+        st.markdown("---")
+
+        trend_col5, trend_col6 = st.columns(2)
+
+        with trend_col5:
+            st.markdown("**Tickets creados por día**")
         
-                trend_col5, trend_col6 = st.columns(2)
+            df_trend = df_provider.dropna(subset=["_Creado_dt"]).copy()
         
-                with trend_col5:
-                    st.markdown("**Tickets creados por día**")
-                
-                    df_trend = df_provider.dropna(subset=["_Creado_dt"]).copy()
-                
-                    if df_trend.empty:
-                        st.info("No hay fechas válidas para generar la tendencia diaria.")
-                    else:
-                        df_trend["Día"] = df_trend["_Creado_dt"].dt.date
-                
-                        tickets_by_day = (
-                            df_trend
-                            .groupby("Día")["Clave"]
-                            .count()
-                            .sort_index()
-                        )
+            if df_trend.empty:
+                st.info("No hay fechas válidas para generar la tendencia diaria.")
+            else:
+                df_trend["Día"] = df_trend["_Creado_dt"].dt.date
+        
+                tickets_by_day = (
+                    df_trend
+                    .groupby("Día")["Clave"]
+                    .count()
+                    .sort_index()
+                )
         
                 render_static_daily_trend_chart(tickets_by_day)
 
