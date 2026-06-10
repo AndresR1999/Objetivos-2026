@@ -9,7 +9,8 @@ import streamlit.components.v1 as components
 import unicodedata
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
-
+from matplotlib.ticker import MaxNLocator, StrMethodFormatter
+import math
 
 st.set_page_config(
     page_title="P. S. O. - MANGO",
@@ -1477,10 +1478,12 @@ def render_static_daily_trend_chart(series):
         ha="right"
     )
 
-    max_value = chart_data.max()
+    max_value = int(chart_data.max()) if not chart_data.empty else 0
+    y_max = max(1, math.ceil(max_value * 1.18))
 
-    if max_value > 0:
-        ax.set_ylim(0, max_value * 1.18)
+    ax.set_ylim(0, y_max)
+    ax.yaxis.set_major_locator(MaxNLocator(integer=True))
+    ax.yaxis.set_major_formatter(StrMethodFormatter("{x:.0f}"))
 
     fig.tight_layout()
 
