@@ -812,10 +812,10 @@ if not proveedor_field_id:
         "Revisa que el nombre del campo coincida exactamente con Jira."
     )
 
-tab_tickets, tab_analytics, tab_grafana = st.tabs([
+tab_tickets, tab_analytics, tab_panel_operativo = st.tabs([
     "📋 Tickets",
     "📊 Proveedores y tendencias",
-    "📈 Grafana B2B Miniload"
+    "📈 Panel Operativo"
 ])
 
 
@@ -1204,39 +1204,111 @@ with tab_tickets:
             scrolling=False
         )
 
-with tab_grafana:
-    st.markdown("**Dashboard Grafana — B2B Miniload**")
-    st.caption(
-        "Este dashboard se carga desde Grafana interno. "
-        "Necesitas estar conectado a la red Mango o VPN y tener permisos en Grafana."
+with tab_panel_operativo:
+    st.markdown("**🚨 Panel Operativo**")
+
+    st.info(
+        "Panel de accesos rápidos para revisar puntos críticos operativos. "
+        "Los enlaces se abren en una nueva pestaña y requieren red Mango o VPN cuando aplique."
     )
 
-    grafana_dashboard_url = (
-        "https://pappgrafana01.intranet.mango.es/d/aexjkawslh9mod/b2b-miniload"
-        "?orgId=1"
-        "&from=now-24h"
-        "&to=now"
-        "&timezone=browser"
-        "&var-Metrica=cajas_posibles"
-        "&var-Tipo_ubicacion=$__all"
-        "&var-Pasillo=$__all"
-        "&var-Zona=$__all"
-        "&var-Tipo_bloque=$__all"
-        "&refresh=15m"
-        "&kiosk"
-    )
+    def render_link_button(label, url, help_text=None):
+        if help_text:
+            st.caption(help_text)
 
-    st.link_button(
-        "Abrir dashboard en Grafana",
-        grafana_dashboard_url,
-        use_container_width=True
-    )
+        st.link_button(
+            label,
+            url,
+            use_container_width=True
+        )
 
-    components.iframe(
-        grafana_dashboard_url,
-        height=950,
-        scrolling=True
-    )
+    # -------------------------
+    # CHECKLIST
+    # -------------------------
+    st.markdown("### ✅ Checklist")
+
+    checklist_links = [
+        {
+            "label": "Revisión estado pasillos ST45 y ST46 — B2C",
+            "url": "http://pappferagwcs01:6061/angularspa/stingray/outbounds",
+            "help": "Consulta del estado de los pasillos ST45 y ST46 en B2C."
+        },
+        {
+            "label": "Puntos críticos del Grafana B2C",
+            "url": "https://pappgrafana01.intranet.mango.es/d/bessvfn69hq80f/b2c-pocket-sorter-analytical?orgId=1&from=now-24h&to=now&timezone=browser&refresh=1m",
+            "help": "Dashboard analítico B2C Pocket Sorter con refresco cada minuto."
+        },
+        {
+            "label": "Revisión estado reposiciones B2C — Macrolet",
+            "url": "http://pappferagwcs01:6061/angularspa/shuttle-psorders/in-progress/sku",
+            "help": "Seguimiento de reposiciones en curso por SKU."
+        },
+    ]
+
+    checklist_cols = st.columns(3)
+
+    for idx, item in enumerate(checklist_links):
+        with checklist_cols[idx % 3]:
+            render_link_button(
+                item["label"],
+                item["url"],
+                item["help"]
+            )
+
+    st.divider()
+
+    # -------------------------
+    # GRAFANA
+    # -------------------------
+    st.markdown("### 📈 Grafana")
+
+    grafana_links = {
+        "General": [
+            {
+                "label": "Alertas procesos logísticos — B2B/B2C",
+                "url": "https://pappgrafana01.intranet.mango.es/d/50215d42-0a24-4c39-86f0-dff481543616/b2b2b-b2c-alertas-procesos-logisticos?orgId=1&from=now-12h&to=now&timezone=browser&refresh=30s",
+                "help": "Vista general de alertas de procesos logísticos con refresco cada 30 segundos."
+            },
+            {
+                "label": "Procesos logísticos — Picking / Sorter S1",
+                "url": "https://pappgrafana01.intranet.mango.es/d/beh2sd2ik2ha8a/b2b2b-b2c-procesos-logisticos?orgId=1&from=now-12h&to=now&timezone=browser&var-Tipo=Picking&var-Estado=$__all&var-Origen=$__all&var-Destino=Sorter_S1&var-Prioridad=$__all&var-Group_by=origen&var-plc10_origen=$__all&var-plc10_destino=$__all&var-plc10_group_by=origen_destino&refresh=1m",
+                "help": "Procesos logísticos filtrados por Picking y destino Sorter S1."
+            },
+        ],
+        "B2C": [
+            {
+                "label": "B2C Pocket Sorter Analytical",
+                "url": "https://pappgrafana01.intranet.mango.es/d/bessvfn69hq80f/b2c-pocket-sorter-analytical?orgId=1&from=now-24h&to=now&timezone=browser&refresh=1m",
+                "help": "Dashboard analítico de B2C Pocket Sorter."
+            },
+        ],
+        "Expediciones": [
+            {
+                "label": "B2B E3 Expediciones — Métricas",
+                "url": "https://pappgrafana01.intranet.mango.es/d/belc9wewp5tz4b/b2b-e3-expediciones-metricas?orgId=1&from=now-24h&to=now&timezone=browser&var-Rechazo=$__all&var-Rampas=$__all&var-Playas=$__all&var-Subrampa=$__all&refresh=5m",
+                "help": "Métricas de expediciones, rampas, playas, subrampas y rechazos."
+            },
+        ],
+        "Miniload": [
+            {
+                "label": "B2B Miniload — Cajas posibles",
+                "url": "https://pappgrafana01.intranet.mango.es/d/aexjkawslh9mod/b2b-miniload?orgId=1&from=now-24h&to=now&timezone=browser&var-Metrica=cajas_posibles&var-Tipo_ubicacion=$__all&var-Pasillo=$__all&var-Zona=$__all&var-Tipo_bloque=$__all&refresh=15m",
+                "help": "Dashboard B2B Miniload filtrado por métrica cajas posibles."
+            },
+        ],
+    }
+
+    for section_name, links in grafana_links.items():
+        with st.expander(section_name, expanded=True):
+            grafana_cols = st.columns(2)
+
+            for idx, item in enumerate(links):
+                with grafana_cols[idx % 2]:
+                    render_link_button(
+                        item["label"],
+                        item["url"],
+                        item["help"]
+                    )
 
 
 def apply_chart_style(ax):
