@@ -271,9 +271,9 @@ def extract_asset_refs(value):
                 if match:
                     object_id = match.group(1)
 
-        if workspace_id and object_id:
+        if object_id:
             refs.append({
-                "workspace_id": str(workspace_id),
+                "workspace_id": str(workspace_id or ""),
                 "object_id": str(object_id)
             })
 
@@ -468,9 +468,9 @@ def get_jira_issues(jql, max_results, proveedor_field_name):
         params = {
             "jql": jql,
             "maxResults": current_page_size,
-            "fields": ",".join(base_fields),
-            "expand": "renderedFields"
+            "fields": ",".join(base_fields)
         }
+
 
 
         if next_page_token:
@@ -496,7 +496,6 @@ def get_jira_issues(jql, max_results, proveedor_field_name):
 
     for issue in all_issues:
         fields = issue.get("fields", {})
-        rendered_fields = issue.get("renderedFields", {})
     
         status = fields.get("status") or {}
 
@@ -512,7 +511,7 @@ def get_jira_issues(jql, max_results, proveedor_field_name):
         if proveedor_field_id:
             proveedor_value = extract_provider_value(
                 fields.get(proveedor_field_id),
-                rendered_fields.get(proveedor_field_id)
+                None
             )
 
 
@@ -616,6 +615,32 @@ def split_external_providers(value):
 
 df["_proveedores_lista"] = df["Proveedor externo"].apply(split_external_providers)
 
+search_columns = [
+    "Clave",
+    "Resumen",
+    "Estado",
+    "Proveedor externo",
+    "Responsable",
+    "Creador",
+    "Prioridad",
+    "Tipo",
+    "Proyecto",
+    "Labels"
+]
+
+existing_search_columns = [
+    col for col in search_columns
+    if col in df.columns
+]
+
+df["_search_blob"] = (
+    df[existing_search_columns]
+    .fillna("")
+    .astype(str)
+    .agg(" ".join, axis=1)
+    .str.lower()
+)
+
 st.sidebar.header("🔎 Filtros")
 
 estados = sorted([x for x in df["Estado"].dropna().unique() if x])
@@ -648,7 +673,8 @@ if st.sidebar.button("🗑️ Borrar filtros", use_container_width=True):
     st.rerun()
 
 if st.sidebar.button("🔄 Refrescar datos", use_container_width=True):
-    st.cache_data.clear()
+    get_current_user.clear()
+    get_jira_issues.clear()
     st.rerun()
 
 st.sidebar.markdown("---")
@@ -724,18 +750,16 @@ prioridad_sel = st.sidebar.multiselect(
 df_filtered = df.copy()
 
 if texto:
-    texto_lower = texto.lower()
+    texto_lower = texto.strip().lower()
 
-    columnas_busqueda = [
-        col for col in df_filtered.columns
-        if not col.startswith("_")
-    ]
-
-    df_filtered = df_filtered[
-        df_filtered[columnas_busqueda].astype(str).apply(
-            lambda row: row.str.lower().str.contains(texto_lower, na=False)
-        ).any(axis=1)
-    ]
+    if texto_lower:
+        df_filtered = df_filtered[
+            df_filtered["_search_blob"].str.contains(
+                re.escape(texto_lower),
+                na=False,
+                regex=True
+            )
+        ]
 
 if vista == "Asignados a mí":
     df_filtered = df_filtered[
@@ -812,11 +836,16 @@ if not proveedor_field_id:
         "Revisa que el nombre del campo coincida exactamente con Jira."
     )
 
-tab_tickets, tab_analytics, tab_panel_operativo = st.tabs([
-    "📋 Tickets",
-    "📊 Proveedores y tendencias",
-    "📈 Panel Operativo"
-])
+seccion = st.radio(
+    "Sección",
+    [
+        "📋 Tickets",
+        "📊 Proveedores y tendencias",
+        "📈 Panel Operativo"
+    ],
+    horizontal=True,
+    label_visibility="collapsed"
+)
 
 
 columns_to_show = [
@@ -837,7 +866,9 @@ existing_columns = [
 
 df_table = df_filtered[existing_columns].copy()
 
+@st.cache_data(ttl=300, show_spinner=False)
 def render_tickets_table(df_table):
+    
     def safe_text(value):
         if pd.isna(value):
             return ""
@@ -1192,7 +1223,7 @@ def render_tickets_table(df_table):
 
     return "".join(html_parts)
 
-with tab_tickets:
+if seccion == "📋 Tickets":
     st.markdown("**Tabla de tickets**")
 
     if df_table.empty:
@@ -1204,7 +1235,7 @@ with tab_tickets:
             scrolling=False
         )
 
-with tab_panel_operativo:
+elif seccion == "📈 Panel Operativo":
     st.markdown("**🚨 Panel Operativo**")
 
     st.info(
@@ -1454,7 +1485,9 @@ def render_static_daily_trend_chart(series):
 
     st.pyplot(fig, clear_figure=True)
 
+@st.cache_data(ttl=300, show_spinner=False)
 def render_static_html_table(df_table, url_column="URL", max_height=None):
+
     if df_table is None or df_table.empty:
         return ""
 
@@ -1632,7 +1665,7 @@ def render_static_html_table(df_table, url_column="URL", max_height=None):
     return html
 
 
-with tab_analytics:
+if seccion == "📊 Proveedores y tendencias":
     st.markdown("**Resumen por proveedor externo**")
     st.caption("Los datos de esta pestaña respetan los filtros seleccionados en la barra lateral.")
 
