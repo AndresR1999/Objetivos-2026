@@ -12,7 +12,7 @@ import matplotlib.dates as mdates
 
 
 st.set_page_config(
-    page_title="Panel de Seguimiento Operativo - MANGO",
+    page_title="P. S. O. - MANGO",
     page_icon="📊",
     layout="wide"
 )
