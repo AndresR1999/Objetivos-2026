@@ -9,6 +9,7 @@ import streamlit.components.v1 as components
 import unicodedata
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
+import oracledb
 from pathlib import Path
 
 st.set_page_config(
