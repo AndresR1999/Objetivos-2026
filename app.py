@@ -2013,25 +2013,25 @@ if seccion == "📊 Proveedores y tendencias":
                 .sort_index()
             )
         
-            available_years = sorted(df_trend["_Creado_dt"].dt.year.dropna().astype(int).unique())
+            available_years = sorted(
+                df_trend["_Creado_dt"]
+                .dt.year
+                .dropna()
+                .astype(int)
+                .unique()
+            )
         
-            filter_col, empty_col = st.columns(2)
+            trend_col5, trend_col6 = st.columns(2)
         
-            with filter_col:
+            with trend_col5:
+                st.markdown("**Tickets creados por día**")
+        
                 selected_year = st.selectbox(
                     "Año",
                     options=available_years,
                     index=len(available_years) - 1,
                     key="daily_trend_year_selector"
                 )
-        
-            with empty_col:
-                st.empty()
-        
-            trend_col5, trend_col6 = st.columns(2)
-        
-            with trend_col5:
-                st.markdown("**Tickets creados por día**")
         
                 render_static_daily_trend_chart(
                     tickets_by_day,
@@ -2040,6 +2040,13 @@ if seccion == "📊 Proveedores y tendencias":
         
             with trend_col6:
                 st.markdown("**Tickets creados por año**")
+        
+                st.markdown(
+                    """
+                    <div style="height: 72px;"></div>
+                    """,
+                    unsafe_allow_html=True
+                )
         
                 df_year = df_provider.dropna(subset=["_Creado_dt"]).copy()
         
@@ -2060,7 +2067,6 @@ if seccion == "📊 Proveedores y tendencias":
                         xlabel="Tickets",
                         color="#7c3aed"
                     )
-
 
 
                 st.markdown("---")
