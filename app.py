@@ -2043,7 +2043,7 @@ if seccion == "📊 Proveedores y tendencias":
             
                 st.markdown(
                     """
-                    <div style="height: 82px;"></div>
+                    <div style="height: 84px;"></div>
                     """,
                     unsafe_allow_html=True
                 )
