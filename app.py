@@ -1431,6 +1431,23 @@ def render_static_daily_trend_chart(series):
     chart_data.index = pd.to_datetime(chart_data.index)
     chart_data = chart_data.sort_index()
 
+    available_years = sorted(chart_data.index.year.unique())
+
+    if len(available_years) > 1:
+        selected_year = st.selectbox(
+            "Año",
+            options=available_years,
+            index=len(available_years) - 1,
+            key="daily_trend_year_selector"
+        )
+
+        chart_data = chart_data[chart_data.index.year == selected_year]
+    else:
+        selected_year = available_years[0]
+
+    if chart_data.empty:
+        st.info(f"No hay datos para el año {selected_year}.")
+        return
 
     fig, ax = plt.subplots(figsize=(7.5, 4.2))
 
