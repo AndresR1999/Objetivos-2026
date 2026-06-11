@@ -1422,7 +1422,7 @@ def render_static_horizontal_bar_chart(
     st.pyplot(fig, clear_figure=True)
 
 
-def render_static_daily_trend_chart(series):
+def render_static_daily_trend_chart(series, selected_year):
     if series is None or series.empty:
         st.info("No hay datos para generar la tendencia diaria.")
         return
@@ -1431,23 +1431,14 @@ def render_static_daily_trend_chart(series):
     chart_data.index = pd.to_datetime(chart_data.index)
     chart_data = chart_data.sort_index()
 
-    available_years = sorted(chart_data.index.year.unique())
-
-    if len(available_years) > 1:
-        selected_year = st.selectbox(
-            "Año",
-            options=available_years,
-            index=len(available_years) - 1,
-            key="daily_trend_year_selector"
-        )
-
-        chart_data = chart_data[chart_data.index.year == selected_year]
-    else:
-        selected_year = available_years[0]
+    chart_data = chart_data[chart_data.index.year == selected_year]
 
     if chart_data.empty:
         st.info(f"No hay datos para el año {selected_year}.")
         return
+
+    year_start = pd.Timestamp(year=selected_year, month=1, day=1)
+    year_end = pd.Timestamp(year=selected_year, month=12, day=31)
 
     fig, ax = plt.subplots(figsize=(7.5, 4.2))
 
@@ -1467,7 +1458,7 @@ def render_static_daily_trend_chart(series):
         alpha=0.12
     )
 
-    ax.set_xlabel("Día")
+    ax.set_xlabel("Fecha")
     ax.set_ylabel("Tickets")
 
     ax.grid(
@@ -1487,6 +1478,8 @@ def render_static_daily_trend_chart(series):
         labelsize=9,
         colors="#475569"
     )
+
+    ax.set_xlim(year_start, year_end)
 
     ax.xaxis.set_major_locator(mdates.MonthLocator(bymonthday=1, interval=1))
     ax.xaxis.set_major_formatter(mdates.DateFormatter("%d/%m/%y"))
@@ -2006,49 +1999,68 @@ if seccion == "📊 Proveedores y tendencias":
 
         st.markdown("---")
 
-        trend_col5, trend_col6 = st.columns(2)
+        df_trend = df_provider.dropna(subset=["_Creado_dt"]).copy()
 
-        with trend_col5:
-            st.markdown("**Tickets creados por día**")
+        if df_trend.empty:
+            st.info("No hay fechas válidas para generar las gráficas de tendencia.")
+        else:
+            df_trend["Día"] = df_trend["_Creado_dt"].dt.date
         
-            df_trend = df_provider.dropna(subset=["_Creado_dt"]).copy()
+            tickets_by_day = (
+                df_trend
+                .groupby("Día")["Clave"]
+                .count()
+                .sort_index()
+            )
         
-            if df_trend.empty:
-                st.info("No hay fechas válidas para generar la tendencia diaria.")
-            else:
-                df_trend["Día"] = df_trend["_Creado_dt"].dt.date
+            available_years = sorted(df_trend["_Creado_dt"].dt.year.dropna().astype(int).unique())
         
-                tickets_by_day = (
-                    df_trend
-                    .groupby("Día")["Clave"]
-                    .count()
-                    .sort_index()
+            filter_col, empty_col = st.columns(2)
+        
+            with filter_col:
+                selected_year = st.selectbox(
+                    "Año",
+                    options=available_years,
+                    index=len(available_years) - 1,
+                    key="daily_trend_year_selector"
                 )
         
-                render_static_daily_trend_chart(tickets_by_day)
-
-        with trend_col6:
-            st.markdown("**Tickets creados por año**")
-
-            df_year = df_provider.dropna(subset=["_Creado_dt"]).copy()
-
-            if df_year.empty:
-                st.info("No hay fechas válidas para generar el gráfico por año.")
-            else:
-                df_year["Año"] = df_year["_Creado_dt"].dt.year.astype(str)
-
-                tickets_by_year = (
-                    df_year
-                    .groupby("Año")["Clave"]
-                    .count()
-                    .sort_index()
+            with empty_col:
+                st.empty()
+        
+            trend_col5, trend_col6 = st.columns(2)
+        
+            with trend_col5:
+                st.markdown("**Tickets creados por día**")
+        
+                render_static_daily_trend_chart(
+                    tickets_by_day,
+                    selected_year
                 )
+        
+            with trend_col6:
+                st.markdown("**Tickets creados por año**")
+        
+                df_year = df_provider.dropna(subset=["_Creado_dt"]).copy()
+        
+                if df_year.empty:
+                    st.info("No hay fechas válidas para generar el gráfico por año.")
+                else:
+                    df_year["Año"] = df_year["_Creado_dt"].dt.year.astype(str)
+        
+                    tickets_by_year = (
+                        df_year
+                        .groupby("Año")["Clave"]
+                        .count()
+                        .sort_index()
+                    )
+        
+                    render_static_horizontal_bar_chart(
+                        tickets_by_year,
+                        xlabel="Tickets",
+                        color="#7c3aed"
+                    )
 
-                render_static_horizontal_bar_chart(
-                    tickets_by_year,
-                    xlabel="Tickets",
-                    color="#7c3aed"
-                )
 
 
                 st.markdown("---")
