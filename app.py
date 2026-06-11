@@ -1471,7 +1471,7 @@ def render_static_daily_trend_chart(series):
         colors="#475569"
     )
 
-    ax.xaxis.set_major_locator(mdates.AutoDateLocator(minticks=4, maxticks=8))
+    ax.xaxis.set_major_locator(mdates.MonthLocator(bymonthday=1, interval=1))
     ax.xaxis.set_major_formatter(mdates.DateFormatter("%d/%m/%y"))
 
     plt.setp(
