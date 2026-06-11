@@ -2040,34 +2040,33 @@ if seccion == "📊 Proveedores y tendencias":
         
             with trend_col6:
                 st.markdown("**Tickets creados por año**")
-        
+            
                 st.markdown(
                     """
-                    <div style="height: 72px;"></div>
+                    <div style="height: 80px;"></div>
                     """,
                     unsafe_allow_html=True
                 )
-        
+            
                 df_year = df_provider.dropna(subset=["_Creado_dt"]).copy()
-        
+            
                 if df_year.empty:
                     st.info("No hay fechas válidas para generar el gráfico por año.")
                 else:
                     df_year["Año"] = df_year["_Creado_dt"].dt.year.astype(str)
-        
+            
                     tickets_by_year = (
                         df_year
                         .groupby("Año")["Clave"]
                         .count()
                         .sort_index()
                     )
-        
+            
                     render_static_horizontal_bar_chart(
                         tickets_by_year,
                         xlabel="Tickets",
                         color="#7c3aed"
                     )
-
 
                 st.markdown("---")
 
